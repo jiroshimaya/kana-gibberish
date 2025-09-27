@@ -15,7 +15,7 @@ class VoiceVoxClient:
             ("text", text),
             ("speaker", speaker),
         )
-        response1 = requests.post(f"{self.url}/audio_query", params=params)
+        response1 = requests.post(f"{self.url}/audio_query", params=params, timeout=30)
         headers = {
             "Content-Type": "application/json",
         }
@@ -24,6 +24,7 @@ class VoiceVoxClient:
             headers=headers,
             params=params,
             data=json.dumps(response1.json()),
+            timeout=30,
         )
         return response2.content
 
@@ -32,7 +33,9 @@ class VoiceVoxClient:
         content = self.get_content(text, speaker)
 
         if filepath:
-            with open(filepath, "wb") as f:
+            from pathlib import Path
+
+            with Path(filepath).open("wb") as f:
                 f.write(content)
 
         wav_io = io.BytesIO(content)

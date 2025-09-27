@@ -86,7 +86,6 @@ def transcribe_audio(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # 決め打ち設定
-    dtype = torch.float32  # 安定性重視でfloat32固定
     pad_sec = 0.5  # 0.5秒パディング固定
 
     # モデルとプロセッサーの準備

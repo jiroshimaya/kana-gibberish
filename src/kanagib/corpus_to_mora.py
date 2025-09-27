@@ -7,6 +7,27 @@ import tqdm
 from datasets import load_dataset
 
 
+def text_to_katakana(text: str) -> list[str]:
+    """
+    Convert Japanese text to katakana using pyopenjtalk.
+
+    Args:
+      text (str): Input Japanese text
+
+    Returns:
+      list[str]: List of katakana blocks
+    """
+    kana = pyopenjtalk.g2p(text, kana=True)
+    # kanaは文字列として返されるので、型を明示
+    if isinstance(kana, str):
+        # カナの塊（カタカナのみ）をすべて抽出
+        kana_blocks = re.findall(r"[ァ-ンヴー]+", kana)
+        return kana_blocks
+    else:
+        # リストが返された場合（通常はあり得ないがsafety check）
+        return []
+
+
 def get_livedoor_texts() -> list[str]:
     dataset = load_dataset("shunk031/livedoor-news-corpus", split=None)
     all_texts = []
@@ -68,8 +89,8 @@ def text_to_kana(text: str) -> list[str]:
     """
 
     kana = pyopenjtalk.g2p(text, kana=True)
-    # カナの塊（カタカナのみ）をすべて抽出
-    kana_blocks = re.findall(r"[ァ-ンヴー]+", kana)
+    # kanaは文字列として返されるので、型を明示
+    kana_blocks = re.findall(r"[ァ-ンヴー]+", kana) if isinstance(kana, str) else []
 
     return kana_blocks
 

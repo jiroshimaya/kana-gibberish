@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import tqdm
 
@@ -38,16 +38,17 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    output_path = args.output
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if args.mode == "bigram":
-        generator = lambda: generate_by_bigram(args.text_length, avoid_sep=True)
-    else:
-        generator = lambda: generate_by_unigram(args.text_length)
+    def generate_text() -> str:
+        if args.mode == "bigram":
+            return generate_by_bigram(args.text_length, avoid_sep=True)
+        else:
+            return generate_by_unigram(args.text_length)
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with output_path.open("w", encoding="utf-8") as f:
         for _ in tqdm.tqdm(range(args.num_sentences)):
-            text = generator()
+            text = generate_text()
             f.write(text + "\n")
     print("Done.")

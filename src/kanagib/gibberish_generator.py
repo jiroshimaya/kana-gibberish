@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 
 class UnigramGenerator:
     """
-    A generator for creating Japanese gibberish using unigram (frequency-based) statistics.
+    A generator for creating Japanese gibberish using
+    unigram (frequency-based) statistics.
     """
 
     _DEFAULT_UNIGRAM_FILE = (
@@ -41,7 +42,7 @@ class UnigramGenerator:
         if not file_path.exists():
             raise FileNotFoundError(f"Unigram data file not found: {file_path}")
 
-        with open(file_path, encoding="utf-8") as f:
+        with file_path.open(encoding="utf-8") as f:
             unigram_freq = json.load(f)
 
         # Pre-compute normalized probabilities for efficient generation
@@ -104,7 +105,7 @@ class BigramGenerator:
         if not file_path.exists():
             raise FileNotFoundError(f"Bigram data file not found: {file_path}")
 
-        with open(file_path, encoding="utf-8") as f:
+        with file_path.open(encoding="utf-8") as f:
             bigram_freq = json.load(f)
 
         # Convert bigram frequencies to conditional probabilities
@@ -144,7 +145,8 @@ class BigramGenerator:
     ) -> str:
         """
         Generate a random mora sequence using bigram conditional probabilities.
-        Starts with <SEP> token and continues until <SEP> token or max_length is reached.
+        Starts with <SEP> token and continues until <SEP> token
+        or max_length is reached.
 
         Args:
             max_length: Maximum length of generated sequence (excluding special tokens)
@@ -171,7 +173,8 @@ class BigramGenerator:
         for _ in range(max_length):
             # Get possible next moras for current mora
             if current_mora not in self._conditional_probs:
-                # If current mora not found, break (shouldn't happen with proper training data)
+                # If current mora not found, break
+                # (shouldn't happen with proper training data)
                 print(
                     f"Warning: '{current_mora}' not found in conditional probabilities"
                 )

@@ -46,7 +46,7 @@ if __name__ == "__main__":
     output_json_path.parent.mkdir(parents=True, exist_ok=True)
 
     voicevox_client = VoiceVoxClient(args.voicevox_url)
-    with open(args.input_file, encoding="utf-8") as f:
+    with Path(args.input_file).open(encoding="utf-8") as f:
         texts = [line.strip() for line in f if line.strip()]
     print(f"Loaded {len(texts)} lines from {args.input_file}")
 
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         content, duration = voicevox_client.generate_wav(
             text,
             speaker=args.voicevox_speaker,
-            filepath=os.path.join(output_wav_dir, wav_filename),
+            filepath=output_wav_dir / wav_filename,
         )
         result_json.append(
             {
@@ -69,6 +69,6 @@ if __name__ == "__main__":
             }
         )
         print(f"Saved to {wav_filename}, duration: {duration:.2f} seconds")
-    with open(output_json_path, "w", encoding="utf-8") as f:
+    with output_json_path.open("w", encoding="utf-8") as f:
         json.dump(result_json, f, ensure_ascii=False, indent=2)
     print(f"All data saved to {output_json_path}")

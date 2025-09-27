@@ -4,7 +4,9 @@ from kanagib.gibberish_generator import BigramGenerator, UnigramGenerator
 class TestUnigramGeneratorGenerate:
     def test_正常系(self):
         """
-        uv run pytest manual_tests/test_gibbrish_generator.py::TestUnigramGeneratorGenerate::test_正常系 -v -s
+        uv run pytest \
+        manual_tests/test_gibbrish_generator.py::TestUnigramGeneratorGenerate:: \
+        test_正常系 -v -s
         """
         generator = UnigramGenerator()
         for _ in range(10):
@@ -14,7 +16,9 @@ class TestUnigramGeneratorGenerate:
 class TestBigramGeneratorGenerate:
     def test_正常系_SEPでストップ(self):
         """
-        uv run pytest manual_tests/test_gibbrish_generator.py::TestBigramGeneratorGenerate::test_正常系_SEPでストップ -v -s
+        uv run pytest \
+        manual_tests/test_gibbrish_generator.py::TestBigramGeneratorGenerate:: \
+        test_正常系_SEPでストップ -v -s
         """
         generator = BigramGenerator()
         for _ in range(10):
@@ -22,7 +26,9 @@ class TestBigramGeneratorGenerate:
 
     def test_正常系_SEPでストップしない(self):
         """
-        uv run pytest manual_tests/test_gibbrish_generator.py::TestBigramGeneratorGenerate::test_正常系_SEPでストップしない -v -s
+        uv run pytest \
+        manual_tests/test_gibbrish_generator.py::TestBigramGeneratorGenerate:: \
+        test_正常系_SEPでストップしない -v -s
         """
         generator = BigramGenerator()
         for _ in range(10):
@@ -30,7 +36,9 @@ class TestBigramGeneratorGenerate:
 
     def test_正常系_SEPを避ける(self):
         """
-        uv run pytest manual_tests/test_gibbrish_generator.py::TestBigramGeneratorGenerate::test_正常系_SEPを避ける -v -s
+        uv run pytest \
+        manual_tests/test_gibbrish_generator.py::TestBigramGeneratorGenerate:: \
+        test_正常系_SEPを避ける -v -s
         """
         generator = BigramGenerator()
         for _ in range(10):

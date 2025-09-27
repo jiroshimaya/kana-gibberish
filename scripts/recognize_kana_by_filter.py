@@ -73,11 +73,16 @@ def create_kana_vocabulary_mask(
             check_token = token
 
         # トークンが全てかな文字でない場合は除外
-        if check_token and not all(
-            is_kana_character(c) or c in [" ", "　"] for c in check_token if c.strip()
+        if (
+            check_token
+            and not all(
+                is_kana_character(c) or c in [" ", "　"]
+                for c in check_token
+                if c.strip()
+            )
+            and check_token.strip()
         ):
-            if check_token.strip():  # 空白のみのトークンは許可
-                allowed_mask[token_id] = False
+            allowed_mask[token_id] = False
 
     return allowed_mask
 
@@ -123,7 +128,6 @@ def transcribe_audio(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # 決め打ち設定
-    dtype = torch.float32  # 安定性重視でfloat32固定
     pad_sec = 0.5  # 0.5秒パディング固定
 
     # モデルとプロセッサーの準備
@@ -133,8 +137,11 @@ def transcribe_audio(
     vocab_mask = create_kana_vocabulary_mask(processor, model_name)
     vocab_mask = vocab_mask.to(device)
 
+    allowed_count = vocab_mask.sum().item()
+    total_count = len(vocab_mask)
     print(
-        f"[INFO] Vocabulary restricted to kana characters. Allowed tokens: {vocab_mask.sum().item()}/{len(vocab_mask)}"
+        f"[INFO] Vocabulary restricted to kana characters. "
+        f"Allowed tokens: {allowed_count}/{total_count}"
     )
 
     # 音声読み込み

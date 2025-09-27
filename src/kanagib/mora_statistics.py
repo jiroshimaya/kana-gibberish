@@ -1,4 +1,4 @@
-from collections import Counter
+from collections import Counter, defaultdict
 
 
 def mora_unigram_frequency(moras: list[str]) -> dict[str, int]:
@@ -25,7 +25,8 @@ def mora_bigram_frequency(moras: list[str]) -> dict[str, dict[str, int]]:
         texts (list[str]): List of Japanese texts
 
     Returns:
-        dict[tuple[str, str], float]: Dictionary of mora bigrams and their appearance rate
+        dict[tuple[str, str], float]: Dictionary of mora bigrams
+            and their appearance rate
     """
     # Generate bigrams
     bigrams = []
@@ -42,9 +43,6 @@ def mora_bigram_frequency(moras: list[str]) -> dict[str, dict[str, int]]:
             result_dict[m1] = {}
         result_dict[m1][m2] = count
     return result_dict
-
-
-from collections import defaultdict
 
 
 # Additional utility function to get conditional probabilities
@@ -64,7 +62,7 @@ def get_conditional_probabilities(
     # Calculate marginal frequencies for first words
     first_word_freq = defaultdict(int)
     for w1, w1_dict in bigram_freq.items():
-        for w2, freq in w1_dict.items():
+        for _w2, freq in w1_dict.items():
             first_word_freq[w1] += freq
 
     # Calculate conditional probabilities
