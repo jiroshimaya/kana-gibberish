@@ -1,8 +1,8 @@
 """Japanese gibberish generation using mora-based statistical models."""
 
 from .gibberish_generator import (
-    UnigramGenerator,
     BigramGenerator,
+    UnigramGenerator,
 )
 
 generate_by_unigram = UnigramGenerator().generate

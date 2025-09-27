@@ -1,4 +1,6 @@
 from collections import Counter
+
+
 def mora_unigram_frequency(moras: list[str]) -> dict[str, int]:
     """
     Calculate the frequency of each mora in the list.
@@ -12,6 +14,7 @@ def mora_unigram_frequency(moras: list[str]) -> dict[str, int]:
     frequency = Counter(moras)
     frequency.pop("<SEP>", None)  # Remove <SEP> from frequency count
     return dict(frequency)
+
 
 def mora_bigram_frequency(moras: list[str]) -> dict[str, dict[str, int]]:
     """
@@ -40,10 +43,14 @@ def mora_bigram_frequency(moras: list[str]) -> dict[str, dict[str, int]]:
         result_dict[m1][m2] = count
     return result_dict
 
+
 from collections import defaultdict
 
+
 # Additional utility function to get conditional probabilities
-def get_conditional_probabilities(bigram_freq: dict[str, dict[str, int]]) -> dict[str, dict[str, float]]:
+def get_conditional_probabilities(
+    bigram_freq: dict[str, dict[str, int]],
+) -> dict[str, dict[str, float]]:
     """
     Convert bigram frequencies to conditional probabilities P(w2|w1).
 
@@ -64,6 +71,8 @@ def get_conditional_probabilities(bigram_freq: dict[str, dict[str, int]]) -> dic
     conditional_probs = defaultdict(dict)
     for w1, w1_dict in bigram_freq.items():
         for w2, freq in w1_dict.items():
-            conditional_probs[w1][w2] = freq / first_word_freq[w1] if first_word_freq[w1] > 0 else 0.0
+            conditional_probs[w1][w2] = (
+                freq / first_word_freq[w1] if first_word_freq[w1] > 0 else 0.0
+            )
 
     return dict(conditional_probs)

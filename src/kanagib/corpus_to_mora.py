@@ -1,16 +1,20 @@
-from datasets import load_dataset
 import re
-import pyopenjtalk
+
 import jamorasep
+import pyopenjtalk
 import tqdm
+
+from datasets import load_dataset
+
 
 def get_livedoor_texts() -> list[str]:
     dataset = load_dataset("shunk031/livedoor-news-corpus", split=None)
     all_texts = []
     for split in ["train", "validation", "test"]:
         for item in dataset[split]:
-            all_texts.append(item["content"]) # type: ignore
+            all_texts.append(item["content"])  # type: ignore
     return all_texts
+
 
 def split_text(text: str, length: int) -> list[str]:
     """
@@ -26,7 +30,7 @@ def split_text(text: str, length: int) -> list[str]:
     # AIDEV-NOTE: textをスペースか記号で分割
     tokens = re.split(r"[\s　、。！？\n\r\t,.!?;:・「」（）【】『』…―—]+", text)
 
-    tokens = [t+"、" for t in tokens if t]
+    tokens = [t + "、" for t in tokens if t]
     tokens[-1] = tokens[-1][:-1]
     chunks = []
     current = ""
@@ -45,11 +49,12 @@ def split_text(text: str, length: int) -> list[str]:
             current += token
         else:
             if current:
-              chunks.append(current)
+                chunks.append(current)
             current = token
     if current:
         chunks.append(current)
     return chunks
+
 
 def text_to_kana(text: str) -> list[str]:
     """
@@ -68,6 +73,7 @@ def text_to_kana(text: str) -> list[str]:
 
     return kana_blocks
 
+
 def split_to_moras(kana: str) -> list[str]:
     """
     Split a katakana string into moras using jamorasep.
@@ -78,12 +84,11 @@ def split_to_moras(kana: str) -> list[str]:
     Returns:
       list[str]: List of moras
     """
-    kanamap = {
-      'クヮ': 'クァ', 'ヂ': 'ジ', 'ヅ': 'ズ', 'ヱ': 'エ', 'ヲ': 'オ'
-    }
+    kanamap = {"クヮ": "クァ", "ヂ": "ジ", "ヅ": "ズ", "ヱ": "エ", "ヲ": "オ"}
     for src, target in kanamap.items():
         kana = kana.replace(src, target)
     return jamorasep.parse(kana, output_format="katakana")
+
 
 def corpus_to_mora(texts: list[str]) -> list[str]:
     """

@@ -1,8 +1,9 @@
-from kanagib.voicevox import VoiceVoxClient
-from kanagib import generate_by_bigram
-from kanagib import generate_by_unigram
 import os
+
 import tqdm
+
+from kanagib import generate_by_bigram, generate_by_unigram
+
 TEXT_LENGTH = 32
 NUM_SENTENCES = 5
 OUTPUT = "output/gibberish.txt"
@@ -10,11 +11,31 @@ MODE = "bigram"
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Generate gibberish text and synthesize speech using VOICEVOX")
-    parser.add_argument("--mode", choices=["unigram", "bigram"], default="bigram", help="Gibberish generation mode")
-    parser.add_argument("--num_sentences", type=int, default=NUM_SENTENCES, help="Number of sentences to generate")
-    parser.add_argument("--text_length", type=int, default=TEXT_LENGTH, help="Length of each generated text")
-    parser.add_argument("--output", type=str, default=OUTPUT, help="Output text file path")
+
+    parser = argparse.ArgumentParser(
+        description="Generate gibberish text and synthesize speech using VOICEVOX"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["unigram", "bigram"],
+        default="bigram",
+        help="Gibberish generation mode",
+    )
+    parser.add_argument(
+        "--num_sentences",
+        type=int,
+        default=NUM_SENTENCES,
+        help="Number of sentences to generate",
+    )
+    parser.add_argument(
+        "--text_length",
+        type=int,
+        default=TEXT_LENGTH,
+        help="Length of each generated text",
+    )
+    parser.add_argument(
+        "--output", type=str, default=OUTPUT, help="Output text file path"
+    )
     args = parser.parse_args()
 
     output_path = args.output
@@ -30,4 +51,3 @@ if __name__ == "__main__":
             text = generator()
             f.write(text + "\n")
     print("Done.")
-      
