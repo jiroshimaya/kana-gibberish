@@ -14,6 +14,11 @@ dependencies = [
     "datasets>=4.1.1",
     "pandas>=2.3.2",
     "pyopenjtalk-plus>=0.4.1.post4",
+    "simpleaudio>=1.0.4",
+    "torch>=2.8.0",
+    "transformers>=4.56.2",
+    "librosa>=0.11.0",
+    "jaconv>=0.4.0",
 ]
 
 [build-system]
