@@ -65,12 +65,7 @@ def create_kana_vocabulary_mask(
             continue
 
         # モデルごとのトークン処理
-        if model_name == "reazon":
-            # Reazonモデル: 先頭のSentencePieceマーカー "▁" を除去
-            check_token = token.lstrip("▁")
-        else:
-            # AndrewMcDowellモデル: そのまま
-            check_token = token
+        check_token = token.lstrip("▁") if model_name == "reazon" else token
 
         # トークンが全てかな文字でない場合は除外
         if (
