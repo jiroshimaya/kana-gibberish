@@ -9,6 +9,11 @@ dependencies = [
     "structlog>=25.4.0",
     "rich>=13.7.0", # structlogのカラフルなコンソール出力用
     "pydantic>=2.11.7",
+    "jamorasep>=0.0.1",
+    "tqdm>=4.67.1",
+    "datasets>=4.1.1",
+    "pandas>=2.3.2",
+    "pyopenjtalk-plus>=0.4.1.post4",
 ]
 
 [build-system]

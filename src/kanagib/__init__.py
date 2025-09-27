@@ -1,16 +1,14 @@
-"""Project name package."""
+"""Japanese gibberish generation using mora-based statistical models."""
 
-# TODO: 実際のプロジェクトの実装に合わせて更新してください
-# from .core.example import ExampleClass, ExampleConfig, process_data
-# from .utils.logging_config import get_logger, set_log_level, setup_logging
+from .gibberish_generator import (
+    UnigramGenerator,
+    BigramGenerator,
+)
+
+generate_by_unigram = UnigramGenerator().generate
+generate_by_bigram = BigramGenerator().generate
 
 __all__ = [
-    # "ExampleClass",
-    # "ExampleConfig",
-    # "get_logger",
-    # "process_data",
-    # "set_log_level",
-    # "setup_logging",
+    "generate_by_unigram",
+    "generate_by_bigram",
 ]
-
-__version__ = "0.1.0"
