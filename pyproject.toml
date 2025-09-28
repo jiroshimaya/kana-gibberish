@@ -20,6 +20,7 @@ dependencies = [
     "librosa>=0.11.0",
     "jaconv>=0.4.0",
     "editdistance>=0.8.1",
+    "kanasim>=0.0.4",
 ]
 
 [build-system]

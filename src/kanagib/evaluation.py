@@ -13,8 +13,20 @@ from pathlib import Path
 from typing import Any
 
 import editdistance
+from kanasim import create_kana_distance_calculator
 
 logger = logging.getLogger(__name__)
+
+# kanasim距離計算器のグローバルインスタンス
+_kana_calculator = None
+
+
+def get_kana_calculator():
+    """kanasim距離計算器のシングルトンインスタンスを取得"""
+    global _kana_calculator  # noqa: PLW0603
+    if _kana_calculator is None:
+        _kana_calculator = create_kana_distance_calculator()
+    return _kana_calculator
 
 
 def calculate_cer(reference: str, hypothesis: str) -> float:
@@ -34,6 +46,81 @@ def calculate_cer(reference: str, hypothesis: str) -> float:
     edit_dist = editdistance.eval(reference, hypothesis)
     cer = edit_dist / len(reference)
     return cer
+
+
+def calculate_kana_distance(reference: str, hypothesis: str) -> float:  # noqa: PLR0911
+    """kanasimを使用してカナ文字の音韻的距離を計算
+
+    Args:
+        reference: 正解テキスト
+        hypothesis: 認識結果テキスト
+
+    Returns:
+        kanasim距離値 (0.0以上の値、0.0が完全一致)
+
+    Note:
+        kanasimはカタカナ専用ライブラリのため、カタカナ以外の文字
+        （ASCII文字、数字、ひらがな、漢字、記号等）が含まれる場合は
+        編集距離ベースのフォールバック値を返す
+
+    Raises:
+        なし（内部でKeyError等をキャッチしてフォールバック処理）
+    """
+    try:
+        calculator = get_kana_calculator()
+        return calculator.calculate(reference, hypothesis)
+    except KeyError as e:
+        # kanasimはカタカナ専用のため、カタカナ以外の文字でKeyErrorが発生
+        logger.warning(
+            f"kanasim calculation failed due to non-katakana characters "
+            f"in '{reference}' vs '{hypothesis}': {e}. Using fallback calculation."
+        )
+
+        # フォールバック: 編集距離をベースにした簡易的な類似度計算
+        if reference == hypothesis:
+            return 0.0
+
+        # 編集距離を正規化した値をフォールバックとして使用
+        edit_dist = editdistance.eval(reference, hypothesis)
+        max_len = max(len(reference), len(hypothesis))
+        if max_len == 0:
+            return 0.0
+
+        # 編集距離を10倍してkanasimの距離スケールに近づける
+        return (edit_dist / max_len) * 10.0
+    except Exception as e:
+        # その他の予期しないエラー
+        logger.error(
+            f"Unexpected error in kanasim calculation for '{reference}' vs "
+            f"'{hypothesis}': {e}. Using fallback calculation."
+        )
+
+        # 同じフォールバック処理
+        if reference == hypothesis:
+            return 0.0
+
+        edit_dist = editdistance.eval(reference, hypothesis)
+        max_len = max(len(reference), len(hypothesis))
+        if max_len == 0:
+            return 0.0
+
+        return (edit_dist / max_len) * 10.0
+
+
+def calculate_multiple_distances(reference: str, hypothesis: str) -> dict[str, float]:
+    """複数の距離指標を一度に計算
+
+    Args:
+        reference: 正解テキスト
+        hypothesis: 認識結果テキスト
+
+    Returns:
+        各距離指標の辞書 {'cer': float, 'kana_distance': float}
+    """
+    return {
+        "cer": calculate_cer(reference, hypothesis),
+        "kana_distance": calculate_kana_distance(reference, hypothesis),
+    }
 
 
 def load_json_dataset(
@@ -92,12 +179,12 @@ def evaluate_dataset(
         **transcribe_kwargs: 転写関数に渡すキーワード引数
 
     Returns:
-        評価結果の辞書（individual_results, average_cer等）
+        評価結果の辞書（individual_results, average_metrics等）
     """
     logger.info(f"Starting evaluation. Total samples: {len(dataset)}")
 
     results = []
-    total_cer = 0.0
+    total_metrics = {"cer": 0.0, "kana_distance": 0.0}
     processed_count = 0
 
     for i, item in enumerate(dataset):
@@ -115,22 +202,28 @@ def evaluate_dataset(
             # 音声認識実行
             hypothesis = transcribe_func(wav_path, **transcribe_kwargs)
 
-            # CER計算
-            cer = calculate_cer(reference, hypothesis)
+            # 複数距離指標を計算
+            distances = calculate_multiple_distances(reference, hypothesis)
 
             result = {
                 "id": item_id,
                 "wav_file": item["wav_file"],
                 "reference": reference,
                 "hypothesis": hypothesis,
-                "cer": cer,
+                "cer": distances["cer"],
+                "kana_distance": distances["kana_distance"],
             }
 
             results.append(result)
-            total_cer += cer
+
+            # 各指標の合計を計算
+            for metric, value in distances.items():
+                total_metrics[metric] += value
+
             processed_count += 1
 
-            logger.info(f"  CER: {cer:.4f}")
+            logger.info(f"  CER: {distances['cer']:.4f}")
+            logger.info(f"  Kana Distance: {distances['kana_distance']:.4f}")
             logger.info(f"  REF: {reference}")
             logger.info(f"  HYP: {hypothesis}")
 
@@ -139,11 +232,17 @@ def evaluate_dataset(
             continue
 
     # 結果まとめ
-    average_cer = total_cer / processed_count if processed_count > 0 else 0.0
+    average_metrics = {}
+    if processed_count > 0:
+        for metric, total in total_metrics.items():
+            average_metrics[f"average_{metric}"] = total / processed_count
+    else:
+        for metric in total_metrics:
+            average_metrics[f"average_{metric}"] = 0.0
 
     return {
         "individual_results": results,
-        "average_cer": average_cer,
+        **average_metrics,  # average_cer, average_kana_distanceを展開
         "processed_count": processed_count,
         "total_count": len(dataset),
     }
@@ -160,22 +259,36 @@ def print_evaluation_results(
     """
     mode_suffix = f" ({mode_description})" if mode_description else ""
 
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     print(f"EVALUATION RESULTS{mode_suffix}")
-    print("=" * 50)
+    print("=" * 60)
 
     processed = evaluation_results["processed_count"]
     total = evaluation_results["total_count"]
     print(f"\nProcessed: {processed}/{total} samples")
-    print(f"Average CER: {evaluation_results['average_cer']:.4f}")
 
-    print("\n" + "-" * 50)
+    # 複数の平均指標を表示
+    print("\nAverage Metrics:")
+    if "average_cer" in evaluation_results:
+        print(f"  CER (Character Error Rate): {evaluation_results['average_cer']:.4f}")
+    if "average_kana_distance" in evaluation_results:
+        kana_dist = evaluation_results["average_kana_distance"]
+        print(f"  Kana Distance (kanasim):    {kana_dist:.4f}")
+
+    print("\n" + "-" * 60)
     print("Individual Results:")
-    print("-" * 50)
+    print("-" * 60)
 
     for result in evaluation_results["individual_results"]:
         print(f"\nID: {result['id']}")
         print(f"File: {result['wav_file']}")
-        print(f"CER: {result['cer']:.4f}")
+
+        # 複数の距離指標を表示
+        print("Metrics:")
+        if "cer" in result:
+            print(f"  CER: {result['cer']:.4f}")
+        if "kana_distance" in result:
+            print(f"  Kana Distance: {result['kana_distance']:.4f}")
+
         print(f"REF: {result['reference']}")
         print(f"HYP: {result['hypothesis']}")
