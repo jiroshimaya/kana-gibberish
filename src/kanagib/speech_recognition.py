@@ -60,6 +60,10 @@ def text_to_katakana(text: str) -> str:
     """
     # 読み仮名を取得
     phonemes = pyopenjtalk.g2p(text, kana=True)
+    
+    # phonemesがstrであることを保証
+    if isinstance(phonemes, list):
+        phonemes = "".join(phonemes)
 
     # カタカナ（ア-ヴ）と長音記号（ー）のみを抽出
     katakana_pattern = r"[ア-ヴー]+"
@@ -154,7 +158,7 @@ def setup_model_and_processor(
     model = Wav2Vec2ForCTC.from_pretrained(model_id)
 
     # デバイス設定（float32固定）
-    model = model.to(device)
+    model = model.to(device) # type:ignore
 
     return model, processor
 
