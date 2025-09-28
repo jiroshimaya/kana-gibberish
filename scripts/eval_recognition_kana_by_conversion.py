@@ -2,7 +2,7 @@
 Kana ASR Evaluation Tool using pyopenjtalk conversion for JSON datasets.
 
 Evaluates speech recognition models on JSON datasets, converting ASR output
-to kata    with Path(json_path).open(encoding='utf-8') as f:ana using pyopenjtalk and calculating Character Error Rate (CER).
+to katakana using pyopenjtalk and calculating Character Error Rate (CER).
 
 Supported models:
   - AndrewMcDowell/wav2vec2-xls-r-1b-japanese-hiragana-katakana
