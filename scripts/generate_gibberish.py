@@ -2,7 +2,7 @@ from pathlib import Path
 
 import tqdm
 
-from kanagib import generate_by_bigram, generate_by_unigram, generate_by_random
+from kanagib import generate_by_bigram, generate_by_random, generate_by_unigram
 
 TEXT_LENGTH = 32
 MIN_LENGTH = 1
@@ -25,7 +25,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--stop_on_sep",
         action="store_true",
-        help="Stop generation when a separator mora is encountered (only for bigram mode)",
+        help=(
+            "Stop generation when a separator mora is encountered "
+            "(only for bigram mode)"
+        ),
     )
     parser.add_argument(
         "--num_sentences",
@@ -57,7 +60,12 @@ if __name__ == "__main__":
     def generate_text() -> str:
         if args.mode == "bigram":
             if args.stop_on_sep:
-                return generate_by_bigram(args.text_length, avoid_sep=False, stop_on_sep=True, min_length=args.min_length)
+                return generate_by_bigram(
+                    args.text_length,
+                    avoid_sep=False,
+                    stop_on_sep=True,
+                    min_length=args.min_length,
+                )
             else:
                 return generate_by_bigram(args.text_length, avoid_sep=True)
         elif args.mode == "random":

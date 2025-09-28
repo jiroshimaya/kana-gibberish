@@ -70,38 +70,48 @@ class UnigramGenerator:
 
         # Define special moras that cannot appear at the beginning or consecutively
         special_moras = {"ン", "ー", "ッ"}
-        
+
         # Generate first character avoiding special moras
         first_moras = [mora for mora in self._moras if mora not in special_moras]
-        first_probs_raw = [self._probs[i] for i, mora in enumerate(self._moras) if mora not in special_moras]
-        
+        first_probs_raw = [
+            self._probs[i]
+            for i, mora in enumerate(self._moras)
+            if mora not in special_moras
+        ]
+
         # Renormalize probabilities for first character
         first_probs_sum = sum(first_probs_raw)
         first_probs = [p / first_probs_sum for p in first_probs_raw]
-        
+
         # Generate first character
         sequence = [np.random.choice(first_moras, p=first_probs)]
-        
+
         # Generate remaining characters one by one to avoid consecutive special moras
         for _ in range(length - 1):
             prev_mora = sequence[-1]
-            
+
             # If previous mora is a special mora, avoid special moras for next character
             if prev_mora in special_moras:
-                valid_moras = [mora for mora in self._moras if mora not in special_moras]
-                valid_probs_raw = [self._probs[i] for i, mora in enumerate(self._moras) if mora not in special_moras]
-                
+                valid_moras = [
+                    mora for mora in self._moras if mora not in special_moras
+                ]
+                valid_probs_raw = [
+                    self._probs[i]
+                    for i, mora in enumerate(self._moras)
+                    if mora not in special_moras
+                ]
+
                 # Renormalize probabilities
                 valid_probs_sum = sum(valid_probs_raw)
                 valid_probs = [p / valid_probs_sum for p in valid_probs_raw]
-                
+
                 next_mora = np.random.choice(valid_moras, p=valid_probs)
             else:
                 # Use original probabilities if previous mora is not special
                 next_mora = np.random.choice(self._moras, p=self._probs)
-            
+
             sequence.append(next_mora)
-        
+
         return "".join(sequence)
 
 
@@ -174,10 +184,11 @@ class BigramGenerator:
         return conditional_probs
 
     def generate(
-        self, max_length: int = 100, 
-        stop_on_sep: bool = True, 
+        self,
+        max_length: int = 100,
+        stop_on_sep: bool = True,
         avoid_sep: bool = False,
-        min_length: int = 1
+        min_length: int = 1,
     ) -> str:
         """
         Generate a random mora sequence using bigram conditional probabilities.
@@ -199,13 +210,20 @@ class BigramGenerator:
                        min_length > max_length, or conditional_probs is empty
         """
         if max_length <= 0:
-            raise ValueError(f"Expected positive integer for max_length, got {max_length}")
-        
+            raise ValueError(
+                f"Expected positive integer for max_length, got {max_length}"
+            )
+
         if min_length <= 0:
-            raise ValueError(f"Expected positive integer for min_length, got {min_length}")
-        
+            raise ValueError(
+                f"Expected positive integer for min_length, got {min_length}"
+            )
+
         if min_length > max_length:
-            raise ValueError(f"min_length ({min_length}) cannot be greater than max_length ({max_length})")
+            raise ValueError(
+                f"min_length ({min_length}) cannot be greater than "
+                f"max_length ({max_length})"
+            )
 
         if not self._conditional_probs:
             raise ValueError("Conditional probabilities dictionary is empty")
@@ -226,7 +244,8 @@ class BigramGenerator:
 
             next_mora_probs = self._conditional_probs[current_mora]
 
-            # Filter out <SEP> token if avoid_sep is True or if min_length is not yet reached
+            # Filter out <SEP> token if avoid_sep is True or if min_length is not
+            # yet reached
             should_avoid_sep = avoid_sep or len(sequence) < min_length
             if should_avoid_sep and "<SEP>" in next_mora_probs:
                 filtered_probs = {
@@ -260,6 +279,9 @@ class BigramGenerator:
 
         return "".join(sequence)
 
+
 generate_by_unigram = UnigramGenerator().generate
 generate_by_bigram = BigramGenerator().generate
-generate_by_random = UnigramGenerator(Path(__file__).parent / "data" / "livedoor_mora_random_frequency.json").generate  # type: ignore
+generate_by_random = UnigramGenerator(
+    str(Path(__file__).parent / "data" / "livedoor_mora_random_frequency.json")
+).generate
