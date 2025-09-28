@@ -2,9 +2,10 @@ from pathlib import Path
 
 import tqdm
 
-from kanagib import generate_by_bigram, generate_by_unigram
+from kanagib import generate_by_bigram, generate_by_unigram, generate_by_random
 
 TEXT_LENGTH = 32
+MIN_LENGTH = 1
 NUM_SENTENCES = 5
 OUTPUT = "output/gibberish.txt"
 MODE = "bigram"
@@ -17,9 +18,14 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--mode",
-        choices=["unigram", "bigram"],
+        choices=["unigram", "bigram", "random"],
         default="bigram",
         help="Gibberish generation mode",
+    )
+    parser.add_argument(
+        "--stop_on_sep",
+        action="store_true",
+        help="Stop generation when a separator mora is encountered (only for bigram mode)",
     )
     parser.add_argument(
         "--num_sentences",
@@ -34,6 +40,13 @@ if __name__ == "__main__":
         help="Length of each generated text",
     )
     parser.add_argument(
+        "--min_length",
+        type=int,
+        default=MIN_LENGTH,
+        help="Minimum length of each generated text",
+    )
+
+    parser.add_argument(
         "--output", type=str, default=OUTPUT, help="Output text file path"
     )
     args = parser.parse_args()
@@ -43,7 +56,12 @@ if __name__ == "__main__":
 
     def generate_text() -> str:
         if args.mode == "bigram":
-            return generate_by_bigram(args.text_length, avoid_sep=True)
+            if args.stop_on_sep:
+                return generate_by_bigram(args.text_length, avoid_sep=False, stop_on_sep=True, min_length=args.min_length)
+            else:
+                return generate_by_bigram(args.text_length, avoid_sep=True)
+        elif args.mode == "random":
+            return generate_by_random(args.text_length)
         else:
             return generate_by_unigram(args.text_length)
 
