@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 音声認識してpyopenjtalkでカタカナに変換するスクリプト
 
