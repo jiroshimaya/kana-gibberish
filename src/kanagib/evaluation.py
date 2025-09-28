@@ -292,3 +292,105 @@ def print_evaluation_results(
 
         print(f"REF: {result['reference']}")
         print(f"HYP: {result['hypothesis']}")
+
+
+def evaluate_dataset_batch(
+    dataset: list[dict[str, Any]], 
+    batch_transcribe_func,
+    batch_size: int = 4,
+    **transcribe_kwargs
+) -> dict[str, Any]:
+    """データセット全体の音声認識評価をバッチ処理で実行
+
+    Args:
+        dataset: 評価データセット
+        batch_transcribe_func: バッチ転写関数（audio_paths, **kwargs -> list[str]）
+        batch_size: バッチサイズ
+        **transcribe_kwargs: 転写関数に渡すキーワード引数
+
+    Returns:
+        評価結果の辞書（individual_results, average_metrics等）
+    """
+    logger.info(f"Starting batch evaluation. Total samples: {len(dataset)}, batch_size: {batch_size}")
+
+    # wav_pathが設定されたデータセットのみ処理
+    valid_dataset = [item for item in dataset if "wav_path" in item]
+    if len(valid_dataset) != len(dataset):
+        logger.warning(f"Skipped {len(dataset) - len(valid_dataset)} items without wav_path")
+
+    if not valid_dataset:
+        logger.error("No valid data found in dataset")
+        return {
+            "individual_results": [],
+            "average_cer": 0.0,
+            "average_kana_distance": 0.0,
+            "processed_count": 0,
+            "total_count": len(dataset),
+        }
+
+    # バッチ処理用にパスと参照テキストを分離
+    audio_paths = [item["wav_path"] for item in valid_dataset]
+    references = [item["text"] for item in valid_dataset]
+
+    try:
+        # バッチ転写実行
+        hypotheses = batch_transcribe_func(
+            audio_paths, 
+            batch_size=batch_size,
+            **transcribe_kwargs
+        )
+
+        if len(hypotheses) != len(valid_dataset):
+            raise ValueError(f"Mismatch: {len(hypotheses)} results for {len(valid_dataset)} inputs")
+
+        # 結果を個別に評価
+        results = []
+        total_metrics = {"cer": 0.0, "kana_distance": 0.0}
+
+        for i, (item, hypothesis) in enumerate(zip(valid_dataset, hypotheses)):
+            reference = item["text"]
+            item_id = item.get("id", f"item_{i}")
+
+            # 複数距離指標を計算
+            distances = calculate_multiple_distances(reference, hypothesis)
+
+            result = {
+                "id": item_id,
+                "wav_file": item["wav_file"],
+                "reference": reference,
+                "hypothesis": hypothesis,
+                "cer": distances["cer"],
+                "kana_distance": distances["kana_distance"],
+            }
+
+            results.append(result)
+
+            # 各指標の合計を計算
+            for metric, value in distances.items():
+                total_metrics[metric] += value
+
+            logger.info(f"  CER: {distances['cer']:.4f}")
+            logger.info(f"  Kana Distance: {distances['kana_distance']:.4f}")
+            logger.info(f"  REF: {reference}")
+            logger.info(f"  HYP: {hypothesis}")
+
+        # 結果まとめ
+        processed_count = len(results)
+        average_metrics = {}
+        if processed_count > 0:
+            for metric, total in total_metrics.items():
+                average_metrics[f"average_{metric}"] = total / processed_count
+        else:
+            for metric in total_metrics:
+                average_metrics[f"average_{metric}"] = 0.0
+
+        return {
+            "individual_results": results,
+            **average_metrics,  # average_cer, average_kana_distanceを展開
+            "processed_count": processed_count,
+            "total_count": len(dataset),
+        }
+
+    except Exception as e:
+        logger.error(f"Batch evaluation failed: {e}")
+        raise

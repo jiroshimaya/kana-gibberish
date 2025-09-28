@@ -1,7 +1,19 @@
 """
 Kana ASR Evaluation Tool using pyopenjtalk conversion for JSON datasets.
 
-Evaluates speech recognition models on JSON datasets, converting ASR output
+Evaluates sp        # 結果出力
+        print_evaluation_results(evaluation_results, "conversion")
+        
+        # 実行時間出力
+        end_time = time.time()
+        total_time = end_time - start_time
+        logger.info(f"\n{'='*60}")
+        logger.info(f"TOTAL EXECUTION TIME: {total_time:.2f} seconds ({total_time/60:.2f} minutes)")
+        logger.info(f"Average time per sample: {total_time/len(dataset):.2f} seconds")
+        logger.info(f"Device used: {device}")
+        logger.info(f"{'='*60}")
+
+    except Exception as e: recognition models on JSON datasets, converting ASR output
 to katakana using pyopenjtalk and calculating Character Error Rate (CER).
 
 Supported models:
@@ -18,6 +30,7 @@ Usage:
 import argparse
 import logging
 import sys
+import time
 from pathlib import Path
 
 import torch
@@ -59,8 +72,15 @@ def main():
     )
     args = ap.parse_args()
 
+    start_time = time.time()
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"device={device}, model={args.model}")
+    
+    # GPU情報を詳細に表示
+    if device.type == "cuda":
+        logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+        logger.info(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
 
     json_path = Path(args.json_file)
 
