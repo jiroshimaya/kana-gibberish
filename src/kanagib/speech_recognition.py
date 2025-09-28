@@ -157,13 +157,13 @@ def setup_model_and_processor(
     model_id = config["model_id"]
 
     logger.info(f"Loading model: {model_id}")
-    
+
     # FlashAttention設定の確認
     use_flash_attention = config.get("use_flash_attention", False)
     torch_dtype = config.get("torch_dtype", torch.float32)
-    
+
     processor = AutoProcessor.from_pretrained(model_id)
-    
+
     # GPU使用時のみFlashAttentionと最適化を適用
     model_kwargs = {}
     if device and device.type == "cuda":
@@ -174,15 +174,15 @@ def setup_model_and_processor(
                 logger.info("FlashAttention 2.0 enabled")
             except Exception as e:
                 logger.warning(f"FlashAttention not available, using default: {e}")
-        
+
         model_kwargs["dtype"] = torch_dtype
         logger.info(f"Using dtype: {torch_dtype}")
-    
+
     model = Wav2Vec2ForCTC.from_pretrained(model_id, **model_kwargs)
-    
+
     # デバイス設定
     model = model.to(device)  # type:ignore
-    
+
     # GPU使用時はメモリ使用量を確認
     if device and device.type == "cuda":
         allocated_memory = torch.cuda.memory_allocated(device) / 1024**3
@@ -230,11 +230,9 @@ def transcribe_audio_with_filter(
 
     # 入力準備（公式サンプルに合わせた方式）
     input_values = processor(
-        wav, 
-        sampling_rate=TARGET_SR, 
-        return_tensors="pt"
+        wav, sampling_rate=TARGET_SR, return_tensors="pt"
     ).input_values
-    
+
     # GPUに移動してモデルの型に変換
     model_dtype = next(model.parameters()).dtype
     input_values = input_values.to(device).to(model_dtype)
@@ -291,11 +289,9 @@ def transcribe_audio_with_conversion(
 
     # 入力準備（公式サンプルに合わせた方式）
     input_values = processor(
-        wav, 
-        sampling_rate=TARGET_SR, 
-        return_tensors="pt"
+        wav, sampling_rate=TARGET_SR, return_tensors="pt"
     ).input_values
-    
+
     # GPUに移動してモデルの型に変換
     model_dtype = next(model.parameters()).dtype
     input_values = input_values.to(device).to(model_dtype)
@@ -387,18 +383,20 @@ def transcribe_audio_batch_with_filter(
     )
 
     results = []
-    
+
     # バッチごとに処理
     for i in range(0, len(audio_paths), batch_size):
-        batch_paths = audio_paths[i:i + batch_size]
-        logger.info(f"Processing batch {i//batch_size + 1}/{(len(audio_paths) + batch_size - 1)//batch_size}")
-        
+        batch_paths = audio_paths[i : i + batch_size]
+        current_batch = i // batch_size + 1
+        total_batches = (len(audio_paths) + batch_size - 1) // batch_size
+        logger.info(f"Processing batch {current_batch}/{total_batches}")
+
         # バッチの音声を読み込み
         batch_wavs = []
         for audio_path in batch_paths:
             wav = load_audio_mono_16k(audio_path, pad_sec=pad_sec)
             batch_wavs.append(wav)
-        
+
         # 最大長に合わせてパディング
         max_len = max(len(wav) for wav in batch_wavs)
         padded_wavs = []
@@ -408,32 +406,30 @@ def transcribe_audio_batch_with_filter(
             else:
                 padded_wav = wav
             padded_wavs.append(padded_wav)
-        
+
         # バッチテンソルを作成
         batch_array = np.stack(padded_wavs)
-        
+
         # 入力準備（公式サンプルに合わせた方式）
         input_values = processor(
-            batch_array, 
-            sampling_rate=TARGET_SR, 
-            return_tensors="pt"
+            batch_array, sampling_rate=TARGET_SR, return_tensors="pt"
         ).input_values
-        
+
         # GPUに移動してモデルの型に変換
         model_dtype = next(model.parameters()).dtype
         input_values = input_values.to(device).to(model_dtype)
-        
+
         # バッチ推論
         with torch.inference_mode():
             logits = model(input_values).logits.cpu()  # [B, T, V]
-            
+
             # 語彙制限を適用（vocab_maskもCPUに移動）
             vocab_mask_cpu = vocab_mask.cpu()
             logits = logits.masked_fill(
                 ~vocab_mask_cpu.unsqueeze(0).unsqueeze(0), float("-inf")
             )
             pred_ids = torch.argmax(logits, dim=-1)  # [B, T]
-        
+
         # バッチの各結果をデコード
         for j, pred_id in enumerate(pred_ids):
             text = processor.decode(pred_id, skip_special_tokens=True)
@@ -441,13 +437,13 @@ def transcribe_audio_batch_with_filter(
             katakana_text = jaconv.hira2kata(text)
             results.append(katakana_text)
             logger.info(f"  Sample {i+j+1}: {katakana_text}")
-    
+
     return results
 
 
 def transcribe_audio_batch_with_conversion(
     audio_paths: list[str],
-    model_name: str = "andrewmcdowell", 
+    model_name: str = "andrewmcdowell",
     device: torch.device | None = None,
     pad_sec: float = 0.5,
     batch_size: int = 4,
@@ -478,18 +474,20 @@ def transcribe_audio_batch_with_conversion(
 
     raw_results = []
     katakana_results = []
-    
+
     # バッチごとに処理
     for i in range(0, len(audio_paths), batch_size):
-        batch_paths = audio_paths[i:i + batch_size]
-        logger.info(f"Processing batch {i//batch_size + 1}/{(len(audio_paths) + batch_size - 1)//batch_size}")
-        
+        batch_paths = audio_paths[i : i + batch_size]
+        current_batch = i // batch_size + 1
+        total_batches = (len(audio_paths) + batch_size - 1) // batch_size
+        logger.info(f"Processing batch {current_batch}/{total_batches}")
+
         # バッチの音声を読み込み
         batch_wavs = []
         for audio_path in batch_paths:
             wav = load_audio_mono_16k(audio_path, pad_sec=pad_sec)
             batch_wavs.append(wav)
-        
+
         # 最大長に合わせてパディング
         max_len = max(len(wav) for wav in batch_wavs)
         padded_wavs = []
@@ -499,35 +497,33 @@ def transcribe_audio_batch_with_conversion(
             else:
                 padded_wav = wav
             padded_wavs.append(padded_wav)
-        
+
         # バッチテンソルを作成
         batch_array = np.stack(padded_wavs)
-        
+
         # 入力準備（公式サンプルに合わせた方式）
         input_values = processor(
-            batch_array, 
-            sampling_rate=TARGET_SR, 
-            return_tensors="pt"
+            batch_array, sampling_rate=TARGET_SR, return_tensors="pt"
         ).input_values
-        
+
         # GPUに移動してモデルの型に変換
         model_dtype = next(model.parameters()).dtype
         input_values = input_values.to(device).to(model_dtype)
-        
+
         # バッチ推論（語彙制限なし）
         with torch.inference_mode():
             logits = model(input_values).logits.cpu()  # [B, T, V]
             pred_ids = torch.argmax(logits, dim=-1)  # [B, T]
-        
+
         # バッチの各結果をデコードしてカタカナ変換
         for j, pred_id in enumerate(pred_ids):
             raw_text = processor.decode(pred_id, skip_special_tokens=True)
             katakana_text = text_to_katakana(raw_text)
-            
+
             raw_results.append(raw_text)
             katakana_results.append(katakana_text)
             logger.info(f"  Sample {i+j+1}: {katakana_text}")
-    
+
     if return_raw:
         return raw_results, katakana_results
     else:

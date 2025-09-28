@@ -295,10 +295,10 @@ def print_evaluation_results(
 
 
 def evaluate_dataset_batch(
-    dataset: list[dict[str, Any]], 
+    dataset: list[dict[str, Any]],
     batch_transcribe_func,
     batch_size: int = 4,
-    **transcribe_kwargs
+    **transcribe_kwargs,
 ) -> dict[str, Any]:
     """データセット全体の音声認識評価をバッチ処理で実行
 
@@ -311,12 +311,17 @@ def evaluate_dataset_batch(
     Returns:
         評価結果の辞書（individual_results, average_metrics等）
     """
-    logger.info(f"Starting batch evaluation. Total samples: {len(dataset)}, batch_size: {batch_size}")
+    logger.info(
+        f"Starting batch evaluation. Total samples: {len(dataset)}, "
+        f"batch_size: {batch_size}"
+    )
 
     # wav_pathが設定されたデータセットのみ処理
     valid_dataset = [item for item in dataset if "wav_path" in item]
     if len(valid_dataset) != len(dataset):
-        logger.warning(f"Skipped {len(dataset) - len(valid_dataset)} items without wav_path")
+        logger.warning(
+            f"Skipped {len(dataset) - len(valid_dataset)} items without wav_path"
+        )
 
     if not valid_dataset:
         logger.error("No valid data found in dataset")
@@ -328,26 +333,27 @@ def evaluate_dataset_batch(
             "total_count": len(dataset),
         }
 
-    # バッチ処理用にパスと参照テキストを分離
+    # バッチ処理用にパスを分離
     audio_paths = [item["wav_path"] for item in valid_dataset]
-    references = [item["text"] for item in valid_dataset]
 
     try:
         # バッチ転写実行
         hypotheses = batch_transcribe_func(
-            audio_paths, 
-            batch_size=batch_size,
-            **transcribe_kwargs
+            audio_paths, batch_size=batch_size, **transcribe_kwargs
         )
 
         if len(hypotheses) != len(valid_dataset):
-            raise ValueError(f"Mismatch: {len(hypotheses)} results for {len(valid_dataset)} inputs")
+            raise ValueError(
+                f"Mismatch: {len(hypotheses)} results for {len(valid_dataset)} inputs"
+            )
 
         # 結果を個別に評価
         results = []
         total_metrics = {"cer": 0.0, "kana_distance": 0.0}
 
-        for i, (item, hypothesis) in enumerate(zip(valid_dataset, hypotheses)):
+        for i, (item, hypothesis) in enumerate(
+            zip(valid_dataset, hypotheses, strict=False)
+        ):
             reference = item["text"]
             item_id = item.get("id", f"item_{i}")
 

@@ -8,6 +8,6 @@ from .gibberish_generator import (
 
 __all__ = [
     "generate_by_bigram",
-    "generate_by_unigram",
     "generate_by_random",
+    "generate_by_unigram",
 ]
