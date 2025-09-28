@@ -21,6 +21,8 @@ dependencies = [
     "jaconv>=0.4.0",
     "editdistance>=0.8.1",
     "kanasim>=0.0.4",
+    "wheel>=0.45.1",
+    "flash-attn>=2.8.3",
 ]
 
 [build-system]
