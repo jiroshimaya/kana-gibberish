@@ -37,7 +37,10 @@ logger = logging.getLogger(__name__)
 
 def transcribe_func_filter(audio_path: str, **kwargs) -> str:
     """Filter方式での音声認識"""
-    return transcribe_audio(audio_path, mode="filter", **kwargs)
+    result = transcribe_audio(audio_path, mode="filter", **kwargs)
+    # mode="filter"では常にstrが返される
+    assert isinstance(result, str)
+    return result
 
 
 def main():
