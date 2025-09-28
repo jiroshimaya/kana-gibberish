@@ -42,7 +42,7 @@ def text_to_katakana(text: str) -> str:
     """テキストをpyopenjtalkでカタカナに変換し、カタカナのみを抽出"""
     # 読み仮名を取得
     phonemes = pyopenjtalk.g2p(text, kana=True)
-    
+
     # カタカナ（ア-ヴ）と長音記号（ー）のみを抽出
     katakana_pattern = r"[ア-ヴー]+"
     katakana_matches = re.findall(katakana_pattern, phonemes)
@@ -50,7 +50,7 @@ def text_to_katakana(text: str) -> str:
 
 def transcribe_audio(audio_path: str, model_name: str = "andrewmcdowell"):
     """音声ファイルを音声認識してpyopenjtalkでカタカナに変換"""
-    
+
     # モデル設定
     MODEL_CONFIGS = {
         "andrewmcdowell": {
@@ -60,31 +60,31 @@ def transcribe_audio(audio_path: str, model_name: str = "andrewmcdowell"):
             "model_id": "reazon-research/japanese-wav2vec2-base-rs35kh",
         },
     }
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     config = MODEL_CONFIGS[model_name]
-    
+
     # モデルとプロセッサーの準備
     processor = AutoProcessor.from_pretrained(config["model_id"])
     model = Wav2Vec2ForCTC.from_pretrained(config["model_id"]).to(device)
-    
+
     # 音声読み込み（16kHzモノラル、前後0.5秒パディング）
     wav, _ = librosa.load(audio_path, sr=TARGET_SR, mono=True)
     pad = int(0.5 * TARGET_SR)
     wav = np.pad(wav, pad_width=pad)
-    
+
     # 推論
     inputs = processor(wav, sampling_rate=TARGET_SR, return_tensors="pt")
     with torch.no_grad():
         logits = model(inputs.input_values.to(device)).logits
-    
+
     # デコードして結果を取得
     predicted_ids = torch.argmax(logits, dim=-1)
     transcription = processor.decode(predicted_ids[0])
-    
+
     # pyopenjtalkでカタカナに変換
     katakana_result = text_to_katakana(transcription)
-    
+
     return transcription, katakana_result
 ```
 
@@ -108,13 +108,13 @@ def transcribe_audio(audio_path: str, model_name: str = "andrewmcdowell"):
 def transcribe_with_hiragana_model(audio_path: str):
     """ひらがなASRモデルで認識後、jaconvでカタカナに変換"""
     import jaconv
-    
+
     # ひらがなモデルで認識（上記と同じ流れ）
     transcription, _ = transcribe_audio(audio_path, model_name="andrewmcdowell")
-    
+
     # jaconvでひらがなをカタカナに変換
     katakana_result = jaconv.hira2kata(transcription)
-    
+
     return transcription, katakana_result
 ```
 
@@ -138,59 +138,59 @@ def create_kana_vocabulary_mask(processor: AutoProcessor, model_name: str) -> to
     vocab = processor.tokenizer.get_vocab()
     vocab_size = len(vocab)
     allowed_mask = torch.ones(vocab_size, dtype=torch.bool)
-    
+
     for token, token_id in vocab.items():
         # 特殊トークンは保持
         if token.startswith("<") and token.endswith(">"):
             continue
         if token in ["[UNK]", "[PAD]", "[CLS]", "[SEP]", "|"]:
             continue
-        
+
         # 句読点を除外
         if token in ["、", "。", "，", "．", ",", ".", "!", "?", "！", "？", "・"]:
             allowed_mask[token_id] = False
             continue
-        
+
         # モデルごとのトークン処理
         check_token = token.lstrip("▁") if model_name == "reazon" else token
-        
+
         # トークンが全てかな文字でない場合は除外
-        if (check_token and 
-            not all(is_kana_character(c) or c in [" ", "　"] 
-                   for c in check_token if c.strip()) and 
+        if (check_token and
+            not all(is_kana_character(c) or c in [" ", "　"]
+                   for c in check_token if c.strip()) and
             check_token.strip()):
             allowed_mask[token_id] = False
-    
+
     return allowed_mask
 
 def transcribe_with_kana_restriction(audio_path: str, model_name: str = "andrewmcdowell"):
     """カナ文字制限付きでASRを実行"""
     import jaconv
-    
+
     # モデルとプロセッサーの準備（前述と同じ）
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # ... モデル読み込み処理 ...
-    
+
     # カナ文字語彙マスク作成
     kana_mask = create_kana_vocabulary_mask(processor, model_name)
-    
+
     # 音声読み込み
     # ... 音声処理 ...
-    
+
     # 推論（語彙制限適用）
     with torch.no_grad():
         logits = model(inputs.input_values.to(device)).logits
-        
+
         # カナ文字以外のトークンを大幅に抑制
         logits[:, :, ~kana_mask] = logits[:, :, ~kana_mask] - 1000
-        
+
         predicted_ids = torch.argmax(logits, dim=-1)
-    
+
     transcription = processor.decode(predicted_ids[0])
-    
+
     # ひらがなをカタカナに変換
     katakana_result = jaconv.hira2kata(transcription)
-    
+
     return transcription, katakana_result
 ```
 

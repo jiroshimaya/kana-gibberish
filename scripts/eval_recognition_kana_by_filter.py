@@ -18,10 +18,8 @@ Usage:
 import argparse
 import json
 import logging
-import os
 import sys
 from pathlib import Path
-from typing import Dict, List
 
 import editdistance
 import jaconv
@@ -181,138 +179,144 @@ def transcribe_audio(
 def calculate_cer(reference: str, hypothesis: str) -> float:
     """
     Character Error Rate (CER)を計算
-    
+
     Args:
         reference: 正解テキスト
         hypothesis: 認識結果テキスト
-    
+
     Returns:
         CER値 (0.0-1.0)
     """
     if len(reference) == 0:
         return 1.0 if len(hypothesis) > 0 else 0.0
-    
+
     # 編集距離を計算
     edit_dist = editdistance.eval(reference, hypothesis)
     cer = edit_dist / len(reference)
     return cer
 
 
-def load_json_dataset(json_path: str, wav_dir: str = None) -> List[Dict[str, str]]:
+def load_json_dataset(
+    json_path: str, wav_dir: str | None = None
+) -> list[dict[str, str]]:
     """
     JSONファイルからデータセットを読み込み
-    
+
     Args:
         json_path: JSONファイルのパス
-        wav_dir: 音声ファイルのディレクトリ（Noneの場合はJSONファイルと同じディレクトリのwavフォルダを使用）
-    
+        wav_dir: 音声ファイルのディレクトリ
+            （Noneの場合はJSONファイルと同じディレクトリのwavフォルダを使用）
+
     Returns:
         データセットのリスト
     """
-    with open(json_path, 'r', encoding='utf-8') as f:
+    with Path(json_path).open(encoding="utf-8") as f:
         data = json.load(f)
-    
+
     # wav_dirが指定されていない場合のデフォルト設定
     if wav_dir is None:
         json_parent = Path(json_path).parent
         wav_dir = json_parent / "wav"
-    
+
     wav_dir = Path(wav_dir)
-    
+
     # 音声ファイルのパスを絶対パスに変換
     for item in data:
-        wav_file = item['wav_file']
+        wav_file = item["wav_file"]
         wav_path = wav_dir / wav_file
-        
+
         if not wav_path.exists():
             logger.warning(f"Audio file not found: {wav_path}")
             continue
-            
-        item['wav_path'] = str(wav_path)
-    
+
+        item["wav_path"] = str(wav_path)
+
     return data
 
 
 def evaluate_dataset(
-    dataset: List[Dict[str, str]], 
-    model_name: str = "andrewmcdowell", 
-    device: torch.device = None
-) -> Dict[str, float]:
+    dataset: list[dict[str, str]],
+    model_name: str = "andrewmcdowell",
+    device: torch.device = None,
+) -> dict[str, float]:
     """
     データセット全体の音声認識評価を実行
-    
+
     Args:
         dataset: 評価データセット
         model_name: 使用するモデル名
         device: 使用するデバイス
-    
+
     Returns:
         評価結果の辞書（individual_results, average_cer等）
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     logger.info(f"Starting evaluation with model: {model_name}, device: {device}")
     logger.info(f"Total samples: {len(dataset)}")
-    
+
     results = []
     total_cer = 0.0
     processed_count = 0
-    
+
     for i, item in enumerate(dataset):
-        if 'wav_path' not in item:
+        if "wav_path" not in item:
             logger.warning(f"Skipping item {i}: no wav_path")
             continue
-            
-        wav_path = item['wav_path']
-        reference = item['text']
-        item_id = item.get('id', f'item_{i}')
-        
+
+        wav_path = item["wav_path"]
+        reference = item["text"]
+        item_id = item.get("id", f"item_{i}")
+
         try:
             logger.info(f"Processing {i+1}/{len(dataset)}: {item_id}")
-            
+
             # 音声認識実行
-            hypothesis = transcribe_audio(wav_path, model_name=model_name, device=device)
-            
+            hypothesis = transcribe_audio(
+                wav_path, model_name=model_name, device=device
+            )
+
             # CER計算
             cer = calculate_cer(reference, hypothesis)
-            
+
             result = {
-                'id': item_id,
-                'wav_file': item['wav_file'],
-                'reference': reference,
-                'hypothesis': hypothesis,
-                'cer': cer
+                "id": item_id,
+                "wav_file": item["wav_file"],
+                "reference": reference,
+                "hypothesis": hypothesis,
+                "cer": cer,
             }
-            
+
             results.append(result)
             total_cer += cer
             processed_count += 1
-            
+
             logger.info(f"  CER: {cer:.4f}")
             logger.info(f"  REF: {reference}")
             logger.info(f"  HYP: {hypothesis}")
-            
+
         except Exception as e:
             logger.error(f"Error processing {wav_path}: {e}")
             continue
-    
+
     # 結果まとめ
     average_cer = total_cer / processed_count if processed_count > 0 else 0.0
-    
+
     return {
-        'individual_results': results,
-        'average_cer': average_cer,
-        'processed_count': processed_count,
-        'total_count': len(dataset)
+        "individual_results": results,
+        "average_cer": average_cer,
+        "processed_count": processed_count,
+        "total_count": len(dataset),
     }
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Kana ASR Evaluation Tool for JSON datasets")
+    ap = argparse.ArgumentParser(
+        description="Kana ASR Evaluation Tool for JSON datasets"
+    )
     ap.add_argument(
-        "json_file", 
-        help="JSONデータセットファイル（gibberish_with_wav.json形式）"
+        "json_file", help="JSONデータセットファイル（gibberish_with_wav.json形式）"
     )
     ap.add_argument(
         "--model",
@@ -322,56 +326,61 @@ def main():
     )
     ap.add_argument(
         "--wav-dir",
-        help="音声ファイルディレクトリ（デフォルト: JSONファイルと同じディレクトリのwavフォルダ）"
+        help="音声ファイルディレクトリ\n"
+        "（デフォルト: JSONファイルと同じディレクトリのwavフォルダ）",
     )
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"device={device}, model={args.model}")
-    
+
     json_path = Path(args.json_file)
-    
+
     # JSONファイル存在確認
     if not json_path.exists():
         logger.error(f"JSON file not found: {json_path}")
         sys.exit(1)
-    
-    if json_path.suffix.lower() != '.json':
+
+    if json_path.suffix.lower() != ".json":
         logger.error(f"Input file must be a JSON file, got: {json_path.suffix}")
         sys.exit(1)
-    
+
     try:
         logger.info("JSON dataset evaluation mode")
-        
+
         # データセット読み込み
         dataset = load_json_dataset(str(json_path), args.wav_dir)
-        
+
         if not dataset:
             logger.error("No valid data found in JSON file")
             sys.exit(1)
-        
+
         # バッチ評価実行
-        evaluation_results = evaluate_dataset(dataset, model_name=args.model, device=device)
-        
+        evaluation_results = evaluate_dataset(
+            dataset, model_name=args.model, device=device
+        )
+
         # 結果出力
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("EVALUATION RESULTS")
-        print("="*50)
-        
-        print(f"\nProcessed: {evaluation_results['processed_count']}/{evaluation_results['total_count']} samples")
+        print("=" * 50)
+
+        processed = evaluation_results["processed_count"]
+        total = evaluation_results["total_count"]
+        print(f"\nProcessed: {processed}/{total} samples")
         print(f"Average CER: {evaluation_results['average_cer']:.4f}")
-        
-        print("\n" + "-"*50)
+
+        print("\n" + "-" * 50)
         print("Individual Results:")
-        print("-"*50)
-        
-        for result in evaluation_results['individual_results']:
+        print("-" * 50)
+
+        for result in evaluation_results["individual_results"]:
             print(f"\nID: {result['id']}")
             print(f"File: {result['wav_file']}")
             print(f"CER: {result['cer']:.4f}")
             print(f"REF: {result['reference']}")
             print(f"HYP: {result['hypothesis']}")
-    
+
     except Exception as e:
         logger.error(f"Error: {e}")
         sys.exit(1)
