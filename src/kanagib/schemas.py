@@ -63,6 +63,7 @@ class EvaluationResult:
     json_file: str  # 使用したJSONファイル
     total_samples: int  # 総サンプル数
     average_cer: float  # 平均CER
+    average_kana_distance: float  # 平均カナ距離
     execution_time: float  # 実行時間（秒）
     device: str  # 使用デバイス
     batch_size: int | None = None  # バッチサイズ（バッチ処理使用時）

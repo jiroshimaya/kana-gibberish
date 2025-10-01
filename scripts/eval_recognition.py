@@ -161,6 +161,7 @@ def run_single_evaluation(
         json_file=config.json_file,
         total_samples=len(dataset),
         average_cer=evaluation_results["average_cer"],
+        average_kana_distance=evaluation_results["average_kana_distance"],
         execution_time=execution_time,
         device=str(device),
         batch_size=config.batch_size,
@@ -177,6 +178,20 @@ def save_results(results: list[EvaluationResult], output_path: str) -> None:
     output_data = {
         "evaluation_date": time.strftime("%Y-%m-%d %H:%M:%S"),
         "total_evaluations": len(results),
+        "summary": {
+            "total_samples": sum(r.total_samples for r in results),
+            "total_execution_time": sum(r.execution_time for r in results),
+            "average_cer_across_configs": sum(r.average_cer for r in results)
+            / len(results)
+            if results
+            else 0.0,
+            "average_kana_distance_across_configs": sum(
+                r.average_kana_distance for r in results
+            )
+            / len(results)
+            if results
+            else 0.0,
+        },
         "results": [
             {
                 "config_name": r.config_name,
@@ -185,9 +200,19 @@ def save_results(results: list[EvaluationResult], output_path: str) -> None:
                 "json_file": r.json_file,
                 "total_samples": r.total_samples,
                 "average_cer": r.average_cer,
+                "average_kana_distance": r.average_kana_distance,
                 "execution_time": r.execution_time,
                 "device": r.device,
                 "batch_size": r.batch_size,
+            }
+            for r in results
+        ],
+        "details": [
+            {
+                "config_name": r.config_name,
+                "individual_results": r.details.get("individual_results", [])
+                if r.details
+                else [],
             }
             for r in results
         ],
@@ -220,12 +245,20 @@ def print_summary(results: list[EvaluationResult]) -> None:
     )
     logger.info(f"Average time per evaluation: {total_time / len(results):.2f} seconds")
 
+    # 全体の平均指標も表示
+    avg_cer = sum(r.average_cer for r in results) / len(results)
+    avg_kana_dist = sum(r.average_kana_distance for r in results) / len(results)
+    logger.info("\nOverall Average Metrics:")
+    logger.info(f"  Average CER across configs: {avg_cer:.4f}")
+    logger.info(f"  Average Kana Distance across configs: {avg_kana_dist:.4f}")
+
     logger.info("\nDetailed results:")
     for result in results:
         batch_info = f" (batch={result.batch_size})"
         logger.info(
             f"  {result.config_name}: "
             f"CER={result.average_cer:.4f}, "
+            f"Kana_Dist={result.average_kana_distance:.4f}, "
             f"samples={result.total_samples}, "
             f"time={result.execution_time:.1f}s, "
             f"model={result.model}, "
@@ -233,6 +266,38 @@ def print_summary(results: list[EvaluationResult]) -> None:
         )
 
     logger.info(f"{'=' * 80}")
+
+
+def print_detailed_results(results: list[EvaluationResult]) -> None:
+    """個別ファイルの詳細結果を出力"""
+    if not results:
+        return
+
+    logger.info(f"\n{'=' * 80}")
+    logger.info("DETAILED INDIVIDUAL RESULTS")
+    logger.info(f"{'=' * 80}")
+
+    for result in results:
+        logger.info(f"\n{'-' * 60}")
+        logger.info(f"Config: {result.config_name}")
+        logger.info(f"Model: {result.model}, Mode: {result.mode.value}")
+        logger.info(f"Average CER: {result.average_cer:.4f}")
+        logger.info(f"Average Kana Distance: {result.average_kana_distance:.4f}")
+        logger.info(f"{'-' * 60}")
+
+        if not result.details or "individual_results" not in result.details:
+            logger.info("No individual results available")
+            continue
+
+        for i, item_result in enumerate(result.details["individual_results"], 1):
+            logger.info(f"\n{i}. ID: {item_result['id']}")
+            logger.info(f"   File: {item_result['wav_file']}")
+            logger.info(f"   CER: {item_result['cer']:.4f}")
+            logger.info(f"   Kana Distance: {item_result['kana_distance']:.4f}")
+            logger.info(f"   REF: {item_result['reference']}")
+            logger.info(f"   HYP: {item_result['hypothesis']}")
+
+    logger.info(f"\n{'=' * 80}")
 
 
 def main():
@@ -251,6 +316,11 @@ def main():
         "--dry-run",
         action="store_true",
         help="設定確認のみ実行（実際の評価は行わない）",
+    )
+    ap.add_argument(
+        "--show-details",
+        action="store_true",
+        help="個別ファイルの詳細結果も表示する",
     )
     args = ap.parse_args()
 
@@ -304,6 +374,10 @@ def main():
 
         # 全体サマリー出力
         print_summary(results)
+
+        # 詳細結果出力（オプション）
+        if args.show_details:
+            print_detailed_results(results)
 
         # 結果保存
         if args.output:
