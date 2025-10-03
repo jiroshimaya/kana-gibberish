@@ -9,10 +9,12 @@
 
 import json
 import logging
+import statistics
 from pathlib import Path
 from typing import Any
 
 import editdistance
+import jamorasep
 from kanasim import create_kana_distance_calculator
 
 logger = logging.getLogger(__name__)
@@ -48,7 +50,7 @@ def calculate_cer(reference: str, hypothesis: str) -> float:
     return cer
 
 
-def calculate_kana_distance(reference: str, hypothesis: str) -> float:  # noqa: PLR0911
+def calculate_kana_distance(reference: str, hypothesis: str) -> float:
     """kanasimを使用してカナ文字の音韻的距離を計算
 
     Args:
@@ -56,55 +58,49 @@ def calculate_kana_distance(reference: str, hypothesis: str) -> float:  # noqa: 
         hypothesis: 認識結果テキスト
 
     Returns:
-        kanasim距離値 (0.0以上の値、0.0が完全一致)
+        kanasim距離値 (0.0以上の値、エラー時は-1.0)
+        ・ 0.0が完全一致
+        ・ -1.0はエラー（非カタカナ文字の含有等）
+        ・ referenceのmora数で正規化されている
 
     Note:
         kanasimはカタカナ専用ライブラリのため、カタカナ以外の文字
         （ASCII文字、数字、ひらがな、漢字、記号等）が含まれる場合は
-        編集距離ベースのフォールバック値を返す
+        -1.0を返す。平均計算時にはこの値を除外すること
 
     Raises:
-        なし（内部でKeyError等をキャッチしてフォールバック処理）
+        なし（内部でエラーをキャッチして-1.0を返す）
     """
     try:
+        # kanasim距離を計算
         calculator = get_kana_calculator()
-        return calculator.calculate(reference, hypothesis)
+        raw_distance = calculator.calculate(reference, hypothesis)
+
+        # referenceのmora数を計算（"ー"を除く）
+        reference_moras = jamorasep.parse(reference, output_format="katakana")
+        mora_count = len([mora for mora in reference_moras if mora != "ー"])
+
+        # mora数で正規化（0除算を防ぐ）
+        if mora_count == 0:
+            return 0.0 if raw_distance == 0.0 else -1.0
+
+        normalized_distance = raw_distance / mora_count
+        return normalized_distance
+
     except KeyError as e:
         # kanasimはカタカナ専用のため、カタカナ以外の文字でKeyErrorが発生
         logger.warning(
             f"kanasim calculation failed due to non-katakana characters "
-            f"in '{reference}' vs '{hypothesis}': {e}. Using fallback calculation."
+            f"in '{reference}' vs '{hypothesis}': {e}. Returning error value."
         )
-
-        # フォールバック: 編集距離をベースにした簡易的な類似度計算
-        if reference == hypothesis:
-            return 0.0
-
-        # 編集距離を正規化した値をフォールバックとして使用
-        edit_dist = editdistance.eval(reference, hypothesis)
-        max_len = max(len(reference), len(hypothesis))
-        if max_len == 0:
-            return 0.0
-
-        # 編集距離を10倍してkanasimの距離スケールに近づける
-        return (edit_dist / max_len) * 10.0
+        return -1.0
     except Exception as e:
         # その他の予期しないエラー
         logger.error(
             f"Unexpected error in kanasim calculation for '{reference}' vs "
-            f"'{hypothesis}': {e}. Using fallback calculation."
+            f"'{hypothesis}': {e}. Returning error value."
         )
-
-        # 同じフォールバック処理
-        if reference == hypothesis:
-            return 0.0
-
-        edit_dist = editdistance.eval(reference, hypothesis)
-        max_len = max(len(reference), len(hypothesis))
-        if max_len == 0:
-            return 0.0
-
-        return (edit_dist / max_len) * 10.0
+        return -1.0
 
 
 def calculate_multiple_distances(reference: str, hypothesis: str) -> dict[str, float]:
@@ -168,6 +164,88 @@ def load_json_dataset(
     return data
 
 
+def _process_single_item(
+    item: dict[str, Any], index: int, total: int, transcribe_func, **transcribe_kwargs
+) -> dict[str, Any] | None:
+    """単一アイテムの処理"""
+    if "wav_path" not in item:
+        logger.warning(f"Skipping item {index}: no wav_path")
+        return None
+
+    wav_path = item["wav_path"]
+    reference = item["text"]
+    item_id = item.get("id", f"item_{index}")
+
+    logger.info(f"Processing {index + 1}/{total}: {item_id}")
+
+    # 音声認識実行
+    hypothesis = transcribe_func(wav_path, **transcribe_kwargs)
+
+    # 複数距離指標を計算
+    distances = calculate_multiple_distances(reference, hypothesis)
+
+    result = {
+        "id": item_id,
+        "wav_file": item["wav_file"],
+        "reference": reference,
+        "hypothesis": hypothesis,
+        "cer": distances["cer"],
+        "kana_distance": distances["kana_distance"],
+    }
+
+    # ログ出力（エラー値は適切に表示）
+    cer_str = f"{distances['cer']:.4f}"
+    kana_dist_str = (
+        "ERROR"
+        if distances["kana_distance"] == -1.0
+        else f"{distances['kana_distance']:.4f}"
+    )
+
+    logger.info(f"  CER: {cer_str}")
+    logger.info(f"  Kana Distance: {kana_dist_str}")
+    logger.info(f"  REF: {reference}")
+    logger.info(f"  HYP: {hypothesis}")
+
+    return result
+
+
+def _calculate_summary_metrics(
+    total_metrics: dict[str, float],
+    valid_metrics_count: dict[str, int],
+    metrics_values: dict[str, list[float]],
+    processed_count: int,
+) -> dict[str, float]:
+    """サマリーメトリクスを計算"""
+    summary_metrics = {}
+    if processed_count > 0:
+        for metric, total_value in total_metrics.items():
+            valid_count = valid_metrics_count[metric]
+            values = metrics_values[metric]
+
+            if valid_count > 0 and values:
+                summary_metrics[f"average_{metric}"] = total_value / valid_count
+                summary_metrics[f"max_{metric}"] = max(values)
+                summary_metrics[f"min_{metric}"] = min(values)
+                # 標準偏差の計算（サンプル数が1の場合は0.0）
+                if len(values) > 1:
+                    summary_metrics[f"sd_{metric}"] = statistics.stdev(values)
+                else:
+                    summary_metrics[f"sd_{metric}"] = 0.0
+            else:
+                summary_metrics[f"average_{metric}"] = 0.0
+                summary_metrics[f"max_{metric}"] = 0.0
+                summary_metrics[f"min_{metric}"] = 0.0
+                summary_metrics[f"sd_{metric}"] = 0.0
+    else:
+        for metric in ["cer", "kana_distance"]:
+            summary_metrics[f"average_{metric}"] = 0.0
+            summary_metrics[f"max_{metric}"] = 0.0
+            summary_metrics[f"min_{metric}"] = 0.0
+            summary_metrics[f"sd_{metric}"] = 0.0
+
+    return summary_metrics
+
+
 def evaluate_dataset(
     dataset: list[dict[str, Any]], transcribe_func, **transcribe_kwargs
 ) -> dict[str, Any]:
@@ -185,66 +263,49 @@ def evaluate_dataset(
 
     results = []
     total_metrics = {"cer": 0.0, "kana_distance": 0.0}
+    valid_metrics_count = {"cer": 0, "kana_distance": 0}
+    # 統計計算用のデータ保存
+    metrics_values = {"cer": [], "kana_distance": []}
     processed_count = 0
 
     for i, item in enumerate(dataset):
-        if "wav_path" not in item:
-            logger.warning(f"Skipping item {i}: no wav_path")
-            continue
-
-        wav_path = item["wav_path"]
-        reference = item["text"]
-        item_id = item.get("id", f"item_{i}")
-
         try:
-            logger.info(f"Processing {i + 1}/{len(dataset)}: {item_id}")
-
-            # 音声認識実行
-            hypothesis = transcribe_func(wav_path, **transcribe_kwargs)
-
-            # 複数距離指標を計算
-            distances = calculate_multiple_distances(reference, hypothesis)
-
-            result = {
-                "id": item_id,
-                "wav_file": item["wav_file"],
-                "reference": reference,
-                "hypothesis": hypothesis,
-                "cer": distances["cer"],
-                "kana_distance": distances["kana_distance"],
-            }
+            result = _process_single_item(
+                item, i, len(dataset), transcribe_func, **transcribe_kwargs
+            )
+            if result is None:
+                continue
 
             results.append(result)
 
-            # 各指標の合計を計算
+            # 各指標の合計を計算（エラー値-1.0を除外）
+            distances = {"cer": result["cer"], "kana_distance": result["kana_distance"]}
+
             for metric, value in distances.items():
+                if metric == "kana_distance" and value == -1.0:
+                    # kana_distanceのエラー値は除外
+                    continue
                 total_metrics[metric] += value
+                valid_metrics_count[metric] += 1
+                metrics_values[metric].append(value)
 
             processed_count += 1
 
-            logger.info(f"  CER: {distances['cer']:.4f}")
-            logger.info(f"  Kana Distance: {distances['kana_distance']:.4f}")
-            logger.info(f"  REF: {reference}")
-            logger.info(f"  HYP: {hypothesis}")
-
         except Exception as e:
-            logger.error(f"Error processing {wav_path}: {e}")
+            logger.error(f"Error processing item {i}: {e}")
             continue
 
     # 結果まとめ
-    average_metrics = {}
-    if processed_count > 0:
-        for metric, total in total_metrics.items():
-            average_metrics[f"average_{metric}"] = total / processed_count
-    else:
-        for metric in total_metrics:
-            average_metrics[f"average_{metric}"] = 0.0
+    summary_metrics = _calculate_summary_metrics(
+        total_metrics, valid_metrics_count, metrics_values, processed_count
+    )
 
     return {
         "individual_results": results,
-        **average_metrics,  # average_cer, average_kana_distanceを展開
+        **summary_metrics,  # average_, max_, min_, sd_のメトリクスを展開
         "processed_count": processed_count,
         "total_count": len(dataset),
+        "valid_metrics_count": valid_metrics_count,  # 各指標の有効サンプル数
     }
 
 
@@ -267,13 +328,36 @@ def print_evaluation_results(
     total = evaluation_results["total_count"]
     print(f"\nProcessed: {processed}/{total} samples")
 
-    # 複数の平均指標を表示
-    print("\nAverage Metrics:")
+    # 有効サンプル数の表示
+    if "valid_metrics_count" in evaluation_results:
+        valid_counts = evaluation_results["valid_metrics_count"]
+        print(f"Valid samples for CER: {valid_counts.get('cer', processed)}")
+        kana_distance_count = valid_counts.get("kana_distance", processed)
+        print(f"Valid samples for Kana Distance: {kana_distance_count}")
+
+    # 複数の統計指標を表示
+    print("\nMetrics Summary:")
     if "average_cer" in evaluation_results:
-        print(f"  CER (Character Error Rate): {evaluation_results['average_cer']:.4f}")
+        avg_cer = evaluation_results["average_cer"]
+        max_cer = evaluation_results.get("max_cer", 0.0)
+        min_cer = evaluation_results.get("min_cer", 0.0)
+        sd_cer = evaluation_results.get("sd_cer", 0.0)
+        print("  CER (Character Error Rate):")
+        print(f"    Average: {avg_cer:.4f}")
+        print(f"    Max: {max_cer:.4f}")
+        print(f"    Min: {min_cer:.4f}")
+        print(f"    SD: {sd_cer:.4f}")
+
     if "average_kana_distance" in evaluation_results:
-        kana_dist = evaluation_results["average_kana_distance"]
-        print(f"  Kana Distance (kanasim):    {kana_dist:.4f}")
+        avg_kana = evaluation_results["average_kana_distance"]
+        max_kana = evaluation_results.get("max_kana_distance", 0.0)
+        min_kana = evaluation_results.get("min_kana_distance", 0.0)
+        sd_kana = evaluation_results.get("sd_kana_distance", 0.0)
+        print("  Kana Distance (kanasim):")
+        print(f"    Average: {avg_kana:.4f}")
+        print(f"    Max: {max_kana:.4f}")
+        print(f"    Min: {min_kana:.4f}")
+        print(f"    SD: {sd_kana:.4f}")
 
     print("\n" + "-" * 60)
     print("Individual Results:")
@@ -283,15 +367,108 @@ def print_evaluation_results(
         print(f"\nID: {result['id']}")
         print(f"File: {result['wav_file']}")
 
-        # 複数の距離指標を表示
+        # 複数の距離指標を表示（エラー値は適切に表示）
         print("Metrics:")
         if "cer" in result:
             print(f"  CER: {result['cer']:.4f}")
         if "kana_distance" in result:
-            print(f"  Kana Distance: {result['kana_distance']:.4f}")
+            if result["kana_distance"] == -1.0:
+                print("  Kana Distance: ERROR (non-katakana characters)")
+            else:
+                print(f"  Kana Distance: {result['kana_distance']:.4f}")
 
         print(f"REF: {result['reference']}")
         print(f"HYP: {result['hypothesis']}")
+
+
+def _validate_batch_dataset(dataset: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """バッチ評価用のデータセット検証"""
+    valid_dataset = [item for item in dataset if "wav_path" in item]
+    if len(valid_dataset) != len(dataset):
+        logger.warning(
+            f"Skipped {len(dataset) - len(valid_dataset)} items without wav_path"
+        )
+    return valid_dataset
+
+
+def _create_empty_batch_result(total_count: int) -> dict[str, Any]:
+    """空のバッチ結果を作成"""
+    return {
+        "individual_results": [],
+        "average_cer": 0.0,
+        "average_kana_distance": 0.0,
+        "max_cer": 0.0,
+        "max_kana_distance": 0.0,
+        "min_cer": 0.0,
+        "min_kana_distance": 0.0,
+        "sd_cer": 0.0,
+        "sd_kana_distance": 0.0,
+        "processed_count": 0,
+        "total_count": total_count,
+        "valid_metrics_count": {"cer": 0, "kana_distance": 0},
+    }
+
+
+def _process_batch_results(
+    valid_dataset: list[dict[str, Any]],
+    hypotheses: list[str],
+    total_count: int,
+) -> dict[str, Any]:
+    """バッチ結果を処理してメトリクスを計算"""
+    results = []
+    total_metrics = {"cer": 0.0, "kana_distance": 0.0}
+    valid_metrics_count = {"cer": 0, "kana_distance": 0}
+    metrics_values = {"cer": [], "kana_distance": []}
+
+    for i, (item, hypothesis) in enumerate(
+        zip(valid_dataset, hypotheses, strict=False)
+    ):
+        reference = item["text"]
+        item_id = item.get("id", f"item_{i}")
+
+        # 複数距離指標を計算
+        distances = calculate_multiple_distances(reference, hypothesis)
+
+        result = {
+            "id": item_id,
+            "wav_file": item["wav_file"],
+            "reference": reference,
+            "hypothesis": hypothesis,
+            "cer": distances["cer"],
+            "kana_distance": distances["kana_distance"],
+        }
+
+        results.append(result)
+
+        # 各指標の合計を計算（エラー値-1.0を除外）
+        for metric, value in distances.items():
+            if metric == "kana_distance" and value == -1.0:
+                continue
+            total_metrics[metric] += value
+            valid_metrics_count[metric] += 1
+            metrics_values[metric].append(value)
+
+        # ログ出力
+        cer_str = f"{distances['cer']:.4f}"
+        kana_dist_str = (
+            "ERROR"
+            if distances["kana_distance"] == -1.0
+            else f"{distances['kana_distance']:.4f}"
+        )
+        logger.info(f"  Batch item {i + 1}: CER={cer_str}, Kana={kana_dist_str}")
+
+    # サマリーメトリクス計算
+    summary_metrics = _calculate_summary_metrics(
+        total_metrics, valid_metrics_count, metrics_values, len(results)
+    )
+
+    return {
+        "individual_results": results,
+        **summary_metrics,
+        "processed_count": len(results),
+        "total_count": total_count,
+        "valid_metrics_count": valid_metrics_count,
+    }
 
 
 def evaluate_dataset_batch(
@@ -316,22 +493,11 @@ def evaluate_dataset_batch(
         f"batch_size: {batch_size}"
     )
 
-    # wav_pathが設定されたデータセットのみ処理
-    valid_dataset = [item for item in dataset if "wav_path" in item]
-    if len(valid_dataset) != len(dataset):
-        logger.warning(
-            f"Skipped {len(dataset) - len(valid_dataset)} items without wav_path"
-        )
-
+    # データセット検証
+    valid_dataset = _validate_batch_dataset(dataset)
     if not valid_dataset:
         logger.error("No valid data found in dataset")
-        return {
-            "individual_results": [],
-            "average_cer": 0.0,
-            "average_kana_distance": 0.0,
-            "processed_count": 0,
-            "total_count": len(dataset),
-        }
+        return _create_empty_batch_result(len(dataset))
 
     # バッチ処理用にパスを分離
     audio_paths = [item["wav_path"] for item in valid_dataset]
@@ -347,55 +513,7 @@ def evaluate_dataset_batch(
                 f"Mismatch: {len(hypotheses)} results for {len(valid_dataset)} inputs"
             )
 
-        # 結果を個別に評価
-        results = []
-        total_metrics = {"cer": 0.0, "kana_distance": 0.0}
-
-        for i, (item, hypothesis) in enumerate(
-            zip(valid_dataset, hypotheses, strict=False)
-        ):
-            reference = item["text"]
-            item_id = item.get("id", f"item_{i}")
-
-            # 複数距離指標を計算
-            distances = calculate_multiple_distances(reference, hypothesis)
-
-            result = {
-                "id": item_id,
-                "wav_file": item["wav_file"],
-                "reference": reference,
-                "hypothesis": hypothesis,
-                "cer": distances["cer"],
-                "kana_distance": distances["kana_distance"],
-            }
-
-            results.append(result)
-
-            # 各指標の合計を計算
-            for metric, value in distances.items():
-                total_metrics[metric] += value
-
-            logger.info(f"  CER: {distances['cer']:.4f}")
-            logger.info(f"  Kana Distance: {distances['kana_distance']:.4f}")
-            logger.info(f"  REF: {reference}")
-            logger.info(f"  HYP: {hypothesis}")
-
-        # 結果まとめ
-        processed_count = len(results)
-        average_metrics = {}
-        if processed_count > 0:
-            for metric, total in total_metrics.items():
-                average_metrics[f"average_{metric}"] = total / processed_count
-        else:
-            for metric in total_metrics:
-                average_metrics[f"average_{metric}"] = 0.0
-
-        return {
-            "individual_results": results,
-            **average_metrics,  # average_cer, average_kana_distanceを展開
-            "processed_count": processed_count,
-            "total_count": len(dataset),
-        }
+        return _process_batch_results(valid_dataset, hypotheses, len(dataset))
 
     except Exception as e:
         logger.error(f"Batch evaluation failed: {e}")

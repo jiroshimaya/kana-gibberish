@@ -1,0 +1,22 @@
+{
+  "name": "Simple Evaluation Test",
+  "description": "少数のデータセットでのテスト評価",
+  "configs": [
+    {
+      "name": "sample_test_filter",
+      "description": "サンプルデータでのFilter方式テスト",
+      "json_file": "datasets/sample/gibberish_with_wav.json",
+      "model": "andrewmcdowell",
+      "mode": "filter",
+      "batch_size": 2
+    },
+    {
+      "name": "sample_test_conversion",
+      "description": "サンプルデータでのConversion方式テスト",
+      "json_file": "datasets/sample/gibberish_with_wav.json",
+      "model": "andrewmcdowell",
+      "mode": "conversion",
+      "batch_size": 2
+    }
+  ]
+}

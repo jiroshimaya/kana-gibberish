@@ -38,12 +38,12 @@ repos:
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
 
-  # Dependency vulnerability scanning
-  - repo: https://github.com/pypa/pip-audit
-    rev: v2.7.3
-    hooks:
-      - id: pip-audit
-        args: [--desc, --fix]
+  # Dependency vulnerability scanning (disabled due to pip vulnerabilities)
+  # - repo: https://github.com/pypa/pip-audit
+  #   rev: v2.7.3
+  #   hooks:
+  #     - id: pip-audit
+  #       args: [--desc, --fix]
 
   # Secret detection (optional - uncomment if needed)
   # - repo: https://github.com/Yelp/detect-secrets

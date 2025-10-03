@@ -1,0 +1,134 @@
+{
+  "name": "Gibberish Recognition Evaluation",
+  "description": "複数データセット・モデルでのかな文字音声認識性能評価",
+  "configs": [
+    {
+      "name": "bigram_32_andrewmcdowell_filter",
+      "description": "Bigram 32文字データセット - AndrewMcDowell モデル - Filter方式",
+      "json_file": "datasets/bigram_32_voicevox03/gibberish_with_wav.json",
+      "model": "andrewmcdowell",
+      "mode": "filter",
+      "batch_size": 8
+    },
+    {
+      "name": "bigram_32_andrewmcdowell_conversion",
+      "description": "Bigram 32文字データセット - AndrewMcDowell モデル - Conversion方式",
+      "json_file": "datasets/bigram_32_voicevox03/gibberish_with_wav.json",
+      "model": "andrewmcdowell",
+      "mode": "conversion",
+      "batch_size": 8
+    },
+    {
+      "name": "bigram_32_reazon_filter",
+      "description": "Bigram 32文字データセット - Reazon モデル - Filter方式",
+      "json_file": "datasets/bigram_32_voicevox03/gibberish_with_wav.json",
+      "model": "reazon",
+      "mode": "filter",
+      "batch_size": 8
+    },
+    {
+      "name": "bigram_32_reazon_conversion",
+      "description": "Bigram 32文字データセット - Reazon モデル - Conversion方式",
+      "json_file": "datasets/bigram_32_voicevox03/gibberish_with_wav.json",
+      "model": "reazon",
+      "mode": "conversion",
+      "batch_size": 8
+    },
+    {
+      "name": "bigram_natural_andrewmcdowell_filter",
+      "description": "Bigram Natural データセット - AndrewMcDowell モデル - Filter方式",
+      "json_file": "datasets/bigram_natural_voicevox03/gibberish_with_wav.json",
+      "model": "andrewmcdowell",
+      "mode": "filter",
+      "batch_size": 8
+    },
+    {
+      "name": "bigram_natural_andrewmcdowell_conversion",
+      "description": "Bigram Natural データセット - AndrewMcDowell モデル - Conversion方式",
+      "json_file": "datasets/bigram_natural_voicevox03/gibberish_with_wav.json",
+      "model": "andrewmcdowell",
+      "mode": "conversion",
+      "batch_size": 8
+    },
+    {
+      "name": "bigram_natural_reazon_filter",
+      "description": "Bigram Natural データセット - Reazon モデル - Filter方式",
+      "json_file": "datasets/bigram_natural_voicevox03/gibberish_with_wav.json",
+      "model": "reazon",
+      "mode": "filter",
+      "batch_size": 8
+    },
+    {
+      "name": "bigram_natural_reazon_conversion",
+      "description": "Bigram Natural データセット - Reazon モデル - Conversion方式",
+      "json_file": "datasets/bigram_natural_voicevox03/gibberish_with_wav.json",
+      "model": "reazon",
+      "mode": "conversion",
+      "batch_size": 8
+    },
+    {
+      "name": "unigram_32_andrewmcdowell_filter",
+      "description": "Unigram 32文字データセット - AndrewMcDowell モデル - Filter方式",
+      "json_file": "datasets/unigram_32_voicevox03/gibberish_with_wav.json",
+      "model": "andrewmcdowell",
+      "mode": "filter",
+      "batch_size": 8
+    },
+    {
+      "name": "unigram_32_andrewmcdowell_conversion",
+      "description": "Unigram 32文字データセット - AndrewMcDowell モデル - Conversion方式",
+      "json_file": "datasets/unigram_32_voicevox03/gibberish_with_wav.json",
+      "model": "andrewmcdowell",
+      "mode": "conversion",
+      "batch_size": 8
+    },
+    {
+      "name": "unigram_32_reazon_filter",
+      "description": "Unigram 32文字データセット - Reazon モデル - Filter方式",
+      "json_file": "datasets/unigram_32_voicevox03/gibberish_with_wav.json",
+      "model": "reazon",
+      "mode": "filter",
+      "batch_size": 8
+    },
+    {
+      "name": "unigram_32_reazon_conversion",
+      "description": "Unigram 32文字データセット - Reazon モデル - Conversion方式",
+      "json_file": "datasets/unigram_32_voicevox03/gibberish_with_wav.json",
+      "model": "reazon",
+      "mode": "conversion",
+      "batch_size": 8
+    },
+    {
+      "name": "random_32_andrewmcdowell_filter",
+      "description": "Random 32文字データセット - AndrewMcDowell モデル - Filter方式",
+      "json_file": "datasets/random_32_voicevox03/gibberish_with_wav.json",
+      "model": "andrewmcdowell",
+      "mode": "filter",
+      "batch_size": 8
+    },
+    {
+      "name": "random_32_andrewmcdowell_conversion",
+      "description": "Random 32文字データセット - AndrewMcDowell モデル - Conversion方式",
+      "json_file": "datasets/random_32_voicevox03/gibberish_with_wav.json",
+      "model": "andrewmcdowell",
+      "mode": "conversion",
+      "batch_size": 8
+    },
+    {
+      "name": "random_32_reazon_filter",
+      "description": "Random 32文字データセット - Reazon モデル - Filter方式",
+      "json_file": "datasets/random_32_voicevox03/gibberish_with_wav.json",
+      "model": "reazon",
+      "mode": "filter",
+      "batch_size": 8
+    },
+    {
+      "name": "random_32_reazon_conversion",
+      "description": "Random 32文字データセット - Reazon モデル - Conversion方式",
+      "json_file": "datasets/random_32_voicevox03/gibberish_with_wav.json",
+      "model": "reazon",
+      "mode": "conversion",
+      "batch_size": 8
+    }
+  ]
+}

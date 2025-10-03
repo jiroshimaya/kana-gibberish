@@ -64,6 +64,8 @@ def text_to_katakana(text: str) -> str:
     """
     # 読み仮名を取得
     phonemes = pyopenjtalk.g2p(text, kana=True)
+    # ヲをオに変換
+    phonemes = phonemes.replace("ヲ", "オ")
 
     # phonemesがstrであることを保証
     if isinstance(phonemes, list):

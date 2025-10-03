@@ -663,7 +663,7 @@ wheels = [
 
 [[package]]
 name = "kanagib"
-version = "0.1.dev23+g9e41d94d7.d20250928"
+version = "0.1.dev26+g2c84d5eff.d20250928"
 source = { editable = "." }
 dependencies = [
     { name = "datasets" },
