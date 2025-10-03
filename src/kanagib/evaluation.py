@@ -165,11 +165,7 @@ def load_json_dataset(
 
 
 def _process_single_item(
-    item: dict[str, Any],
-    index: int,
-    total: int,
-    transcribe_func,
-    **transcribe_kwargs
+    item: dict[str, Any], index: int, total: int, transcribe_func, **transcribe_kwargs
 ) -> dict[str, Any] | None:
     """単一アイテムの処理"""
     if "wav_path" not in item:
@@ -283,10 +279,7 @@ def evaluate_dataset(
             results.append(result)
 
             # 各指標の合計を計算（エラー値-1.0を除外）
-            distances = {
-                "cer": result["cer"],
-                "kana_distance": result["kana_distance"]
-            }
+            distances = {"cer": result["cer"], "kana_distance": result["kana_distance"]}
 
             for metric, value in distances.items():
                 if metric == "kana_distance" and value == -1.0:
