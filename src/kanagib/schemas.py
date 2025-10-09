@@ -2,69 +2,167 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
+import json
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Literal, TypedDict
 
 
-class RecognitionMode(str, Enum):
-    """音声認識モード"""
+class DeviceInfo(TypedDict):
+    """デバイス情報の型定義"""
 
-    FILTER = "filter"
-    CONVERSION = "conversion"
+    device_type: str
+    device_name: str
+    memory_total: int
+    memory_available: int
 
 
 @dataclass
 class EvaluationConfig:
-    """評価設定"""
+    name: str
+    description: str
+    json_file: str
+    batch_size: int
+    conditions: list[EvaluationConditionItem]
 
-    name: str  # 評価設定の名前
-    json_file: str  # JSONデータセットファイルパス
-    model: str  # 使用するモデル
-    mode: RecognitionMode  # 音声認識モード
-    wav_dir: str | None = None  # 音声ファイルディレクトリ
-    batch_size: int = 4  # バッチサイズ (GPU使用時はバッチ処理を自動適用)
-    use_batch: bool | None = (
-        None  # バッチ処理強制指定 (None=自動判定, True=強制バッチ, False=単体処理)
-    )
-    description: str = ""  # 評価の説明
-
-    def __post_init__(self) -> None:
-        """バリデーション"""
-        if not Path(self.json_file).exists():
-            raise FileNotFoundError(f"JSON file not found: {self.json_file}")
-
-        if self.wav_dir and not Path(self.wav_dir).exists():
-            raise FileNotFoundError(f"WAV directory not found: {self.wav_dir}")
+    @classmethod
+    def from_filepath(cls, filepath: str) -> EvaluationConfig:
+        """Load EvaluationConfig from a JSON file."""
+        with Path(filepath).open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        conditions = [
+            EvaluationConditionItem.from_dict(item) for item in data["conditions"]
+        ]
+        return cls(
+            name=data["name"],
+            description=data.get("description", ""),
+            batch_size=data.get("batch_size", 1),
+            json_file=filepath,
+            conditions=conditions,
+        )
 
 
 @dataclass
-class EvaluationBatch:
-    """複数の評価設定をまとめたバッチ"""
+class EvaluationConditionItem:
+    name: str
+    description: str
+    json_file: str
+    model: Literal["andrewmcdowell", "reazon"]
+    mode: Literal["filter", "conversion"]
+    dataset: list[DatasetItem]
 
-    name: str  # バッチ名
-    description: str  # バッチの説明
-    configs: list[EvaluationConfig]  # 評価設定のリスト
+    @classmethod
+    def from_dict(cls, data: dict) -> EvaluationConditionItem:
+        """Create EvaluationConditionItem from a dictionary."""
+        return cls(
+            name=data["name"],
+            description=data.get("description", ""),
+            json_file=data["json_file"],
+            model=data["model"],
+            mode=data["mode"],
+            dataset=cls.load_dataset(data["json_file"]),
+        )
 
-    def __post_init__(self) -> None:
-        """バリデーション"""
-        if not self.configs:
-            raise ValueError("At least one evaluation config is required")
+    @classmethod
+    def load_dataset(cls, json_path: str) -> list[DatasetItem]:
+        """Load dataset items from a JSON file and optional WAV directory."""
+        json_path_obj = Path(json_path)
+
+        with json_path_obj.open(encoding="utf-8") as f:
+            data = json.load(f)
+
+        # If wav_dir is not specified, default to 'wav' folder in the same directory
+        # as the JSON file
+        wav_dir_path = json_path_obj.parent / "wav"
+
+        dataset = []
+        for item_dict in data:
+            wav_file = item_dict["wav_file"]
+            wav_path = wav_dir_path / wav_file
+
+            dataset_item = DatasetItem(
+                id=item_dict["id"],
+                text=item_dict["text"],
+                wav_file=item_dict["wav_file"],
+                wav_path=str(wav_path),
+            )
+            dataset.append(dataset_item)
+
+        return dataset
+
+
+@dataclass
+class DatasetItem:
+    """データセットの個別アイテムの型定義"""
+
+    id: str
+    text: str
+    wav_file: str
+    wav_path: str
+
+
+@dataclass
+class RecognitionItem:
+    """認識処理の個別アイテム"""
+
+    id: str  # サンプルID
+    wav_file: str  # 音声ファイルパス
+    reference: str  # 正解テキスト
+    hypothesis: str  # 認識結果テキスト
+    distances: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass
+class ConditionResultItem:
+    name: str
+    json_file: str
+    total_samples: int
+    model: str
+    mode: str
+    distances: dict[str, float]
+
+
+@dataclass
+class SimpleRecognitionResultItem:
+    """グループ化された評価結果の個別アイテム"""
+
+    condition_name: str
+    hypothesis: str
+    distances: dict[str, float]
+
+
+@dataclass
+class GroupedResultItem:
+    """グループ化された評価結果の個別アイテム"""
+
+    id: str
+    wav_file: str
+    reference: str
+    results: list[SimpleRecognitionResultItem]
+
+
+@dataclass
+class EvaluationMetadata:
+    config_name: str  # 評価設定名
+    json_file: str  # 使用したJSONファイル
+    total_samples: int  # 総サンプル数
+    distances: dict[str, float]
+    execution_time: float  # 実行時間（秒）
+    batch_size: int | None = None  # バッチサイズ（バッチ処理使用時）
+    evaluation_date: str | None = None  # 評価実行日時
+    total_evaluations: int | None = None  # 評価設定数
 
 
 @dataclass
 class EvaluationResult:
-    """評価結果"""
+    """評価結果の完全な構造"""
 
-    config_name: str  # 評価設定名
-    model: str  # 使用したモデル
-    mode: RecognitionMode  # 使用した認識モード
-    json_file: str  # 使用したJSONファイル
-    total_samples: int  # 総サンプル数
-    average_cer: float  # 平均CER
-    average_kana_distance: float  # 平均カナ距離
-    execution_time: float  # 実行時間（秒）
-    device: str  # 使用デバイス
-    batch_size: int | None = None  # バッチサイズ（バッチ処理使用時）
-    details: dict[str, Any] | None = None  # 詳細結果
+    metadata: EvaluationMetadata
+    summary: list[ConditionResultItem]
+    details: list[GroupedResultItem] | None = None  # 詳細結果（オプション）
+
+    def to_json(self, filepath: str | Path) -> None:
+        """JSON ファイルに出力"""
+
+        with Path(filepath).open("w", encoding="utf-8") as f:
+            json.dump(asdict(self), f, ensure_ascii=False, indent=2)
