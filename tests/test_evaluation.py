@@ -10,226 +10,333 @@
 
 # テストに必要な最小限のインポートのみ
 
+from __future__ import annotations
+
+from collections.abc import Callable as TypingCallable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from pytest import CaptureFixture
+else:
+    Callable = TypingCallable
+
 from kanagib.evaluation import (
     calculate_cer,
+    calculate_distances,
     calculate_kana_distance,
-    calculate_multiple_distances,
-    evaluate_dataset,
-    print_evaluation_results,
+    evaluate_condition_item,
+    evaluate_config,
+    print_condition_results,
+    print_evaluation_result_summary,
+)
+from kanagib.schemas import (
+    ConditionResultItem,
+    DatasetItem,
+    EvaluationConditionItem,
+    EvaluationConfig,
+    EvaluationMetadata,
+    EvaluationResult,
+    GroupedResultItem,
+    RecognitionItem,
+    SimpleRecognitionResultItem,
 )
 
 
 class TestCalculateCer:
-    def test_正常系_完全一致(self):
+    def test_正常系_完全一致(self) -> None:
         """完全一致の場合CERは0.0"""
         assert calculate_cer("テスト", "テスト") == 0.0
 
-    def test_正常系_完全不一致(self):
-        """完全に異なる場合CERは1.0以上"""
+    def test_正常系_完全不一致(self) -> None:
+        """完全に異なる場合CERは正の値"""
         cer = calculate_cer("アイウ", "カキク")
         assert cer > 0.0
 
-    def test_正常系_部分一致(self):
-        """部分的に一致する場合の計算"""
-        cer = calculate_cer("アイウエオ", "アイカエオ")
-        # 5文字中1文字違うので 1/5 = 0.2
-        assert cer == 0.2
-
-    def test_エッジケース_空文字列_reference(self):
-        """参照が空文字列の場合"""
+    def test_エッジケース_参照が空文字列(self) -> None:
+        """参照文字列が空の場合のCER計算"""
         assert calculate_cer("", "テスト") == 1.0
 
-    def test_エッジケース_空文字列_hypothesis(self):
-        """仮説が空文字列の場合"""
-        assert calculate_cer("テスト", "") == 1.0
-
-    def test_エッジケース_両方空文字列(self):
-        """両方が空文字列の場合"""
+    def test_エッジケース_両方空文字列(self) -> None:
+        """参照・仮説の両方が空文字列の場合"""
         assert calculate_cer("", "") == 0.0
 
 
 class TestCalculateKanaDistance:
-    def test_正常系_完全一致(self):
+    def test_正常系_完全一致(self) -> None:
         """完全一致の場合距離は0.0"""
         assert calculate_kana_distance("テスト", "テスト") == 0.0
 
-    def test_正常系_異なる文字(self):
-        """異なる文字の場合距離が0より大きい"""
+    def test_正常系_異なる文字(self) -> None:
+        """異なる文字列間の距離は正の値"""
         distance = calculate_kana_distance("カナ", "ハナ")
         assert distance > 0.0
 
-    def test_正常系_空文字列(self):
-        """空文字列の処理"""
-        distance1 = calculate_kana_distance("", "アイ")
-        distance2 = calculate_kana_distance("アイ", "")
-        assert distance1 > 0.0
-        assert distance2 > 0.0
 
+class TestCalculateDistances:
+    def test_正常系_完全一致(self) -> None:
+        """完全一致の場合複数距離が0.0になる"""
+        distances = calculate_distances("テスト", "テスト")
 
-class TestCalculateMultipleDistances:
-    def test_正常系_完全一致(self):
-        """完全一致の場合両方の距離が適切"""
-        distances = calculate_multiple_distances("テスト", "テスト")
-
-        assert "cer" in distances
-        assert "kana_distance" in distances
         assert distances["cer"] == 0.0
         assert distances["kana_distance"] == 0.0
 
-    def test_正常系_異なる文字(self):
-        """異なる文字の場合両方の距離が計算される"""
-        distances = calculate_multiple_distances("カナ", "ハナ")
+    def test_正常系_異なる文字(self) -> None:
+        """異なる文字列の場合に距離が正しく計算される"""
+        distances = calculate_distances("カナ", "ハナ")
 
-        assert "cer" in distances
-        assert "kana_distance" in distances
         assert distances["cer"] > 0.0
         assert distances["kana_distance"] > 0.0
 
 
-class TestEvaluateDataset:
-    def test_正常系_基本処理(self):
-        """基本的なデータセット評価処理"""
-        # モックデータセット
+class TestEvaluateConditionItem:
+    def test_正常系_基本処理(self) -> None:
+        """条件評価が正しく実行される"""
         dataset = [
-            {
-                "id": "test_001",
-                "wav_file": "test.wav",
-                "wav_path": "/path/to/test.wav",
-                "text": "テスト",
-            }
+            DatasetItem(
+                id="sample_001",
+                text="テスト",
+                wav_file="sample.wav",
+                wav_path="/tmp/sample.wav",
+            ),
+            DatasetItem(
+                id="sample_002",
+                text="カナ",
+                wav_file="sample2.wav",
+                wav_path="/tmp/sample2.wav",
+            ),
         ]
 
-        # モック転写関数
-        def mock_transcribe(wav_path, **kwargs):
-            return "テスト"
+        condition_item = EvaluationConditionItem(
+            name="demo_condition",
+            description="Demo",
+            json_file="demo.json",
+            model="andrewmcdowell",
+            mode="filter",
+            dataset=dataset,
+        )
 
-        result = evaluate_dataset(dataset, mock_transcribe)
+        def mock_transcribe(audio_paths: list[str]) -> list[str]:
+            return ["テスト", "カナ"]
 
-        assert result["processed_count"] == 1
-        assert result["total_count"] == 1
-        assert "average_cer" in result
-        assert "average_kana_distance" in result
-        assert len(result["individual_results"]) == 1
+        condition_result, recognition_results = evaluate_condition_item(
+            condition_item,
+            mock_transcribe,
+        )
 
-        individual = result["individual_results"][0]
-        assert individual["id"] == "test_001"
-        assert individual["reference"] == "テスト"
-        assert individual["hypothesis"] == "テスト"
-        assert individual["cer"] == 0.0
-        assert individual["kana_distance"] == 0.0
+        assert condition_result.name == "demo_condition"
+        assert condition_result.total_samples == 2
+        assert condition_result.distances["cer"] == 0.0
+        assert condition_result.distances["kana_distance"] == 0.0
 
-    def test_正常系_複数サンプル(self):
-        """複数サンプルの評価処理"""
-        dataset = [
-            {
-                "id": "test_001",
-                "wav_file": "test1.wav",
-                "wav_path": "/path/to/test1.wav",
-                "text": "アイウ",
-            },
-            {
-                "id": "test_002",
-                "wav_file": "test2.wav",
-                "wav_path": "/path/to/test2.wav",
-                "text": "カキク",
-            },
+        assert len(recognition_results) == 2
+        assert recognition_results[0].hypothesis == "テスト"
+        assert recognition_results[1].hypothesis == "カナ"
+
+
+class TestEvaluateConfig:
+    def test_正常系_複数条件(self) -> None:
+        """複数条件の設定を評価できる"""
+        dataset1 = [
+            DatasetItem(
+                id="sample_001",
+                text="テスト",
+                wav_file="sample.wav",
+                wav_path="/tmp/sample.wav",
+            )
+        ]
+        dataset2 = [
+            DatasetItem(
+                id="sample_002",
+                text="カナ",
+                wav_file="sample2.wav",
+                wav_path="/tmp/sample2.wav",
+            )
         ]
 
-        def mock_transcribe(wav_path, **kwargs):
-            if "test1" in wav_path:
-                return "アイウ"  # 完全一致
-            else:
-                return "アイク"  # 部分一致
+        condition1 = EvaluationConditionItem(
+            name="condition1",
+            description="First",
+            json_file="first.json",
+            model="andrewmcdowell",
+            mode="filter",
+            dataset=dataset1,
+        )
+        condition2 = EvaluationConditionItem(
+            name="condition2",
+            description="Second",
+            json_file="second.json",
+            model="reazon",
+            mode="conversion",
+            dataset=dataset2,
+        )
 
-        result = evaluate_dataset(dataset, mock_transcribe)
+        config = EvaluationConfig(
+            name="evaluation_config",
+            description="Test Config",
+            json_file="config.json",
+            batch_size=1,
+            conditions=[condition1, condition2],
+        )
 
-        assert result["processed_count"] == 2
-        assert result["total_count"] == 2
-        assert len(result["individual_results"]) == 2
+        def transcribe_first(audio_paths: list[str]) -> list[str]:
+            return ["テスト" for _ in audio_paths]
 
-    def test_異常系_wav_pathなし(self):
-        """wav_pathが無い場合のスキップ処理"""
-        dataset = [
-            {
-                "id": "test_001",
-                "wav_file": "test.wav",
-                "text": "テスト",
-                # wav_pathが無い
-            }
+        def transcribe_second(audio_paths: list[str]) -> list[str]:
+            return ["カナ" for _ in audio_paths]
+
+        transcribe_functions: list[Callable[[list[str]], list[str]]] = [
+            transcribe_first,
+            transcribe_second,
         ]
 
-        def mock_transcribe(wav_path, **kwargs):
-            return "テスト"
+        evaluation_result = evaluate_config(
+            config,
+            transcribe_functions,
+        )
 
-        result = evaluate_dataset(dataset, mock_transcribe)
+        metadata = evaluation_result.metadata
+        assert metadata.config_name == "evaluation_config"
+        assert metadata.json_file == "config.json"
+        assert metadata.total_samples == 2
+        assert metadata.total_evaluations == 2
+        assert metadata.distances["cer"] == 0.0
 
-        assert result["processed_count"] == 0
-        assert result["total_count"] == 1
-        assert len(result["individual_results"]) == 0
+        assert len(evaluation_result.summary) == 2
+        assert evaluation_result.summary[0].name == "condition1"
+        assert evaluation_result.summary[1].name == "condition2"
 
-    def test_異常系_転写エラー(self):
-        """転写関数でエラーが発生した場合"""
+        assert evaluation_result.details is not None
+        assert len(evaluation_result.details) == 2
+        assert all(detail.results for detail in evaluation_result.details)
+
+    def test_異常系_転写関数が足りない場合(self) -> None:
+        """条件数より少ない転写関数の場合に適切に切り詰められる"""
         dataset = [
-            {
-                "id": "test_001",
-                "wav_file": "test.wav",
-                "wav_path": "/path/to/test.wav",
-                "text": "テスト",
-            }
+            DatasetItem(
+                id="sample_001",
+                text="テスト",
+                wav_file="sample.wav",
+                wav_path="/tmp/sample.wav",
+            )
         ]
 
-        def mock_transcribe(wav_path, **kwargs):
-            raise Exception("転写エラー")
+        condition = EvaluationConditionItem(
+            name="condition",
+            description="Condition",
+            json_file="condition.json",
+            model="andrewmcdowell",
+            mode="filter",
+            dataset=dataset,
+        )
 
-        result = evaluate_dataset(dataset, mock_transcribe)
+        config = EvaluationConfig(
+            name="evaluation_config",
+            description="Test Config",
+            json_file="config.json",
+            batch_size=1,
+            conditions=[condition],
+        )
 
-        assert result["processed_count"] == 0
-        assert result["total_count"] == 1
-        assert len(result["individual_results"]) == 0
+        def transcribe(audio_paths: list[str]) -> list[str]:
+            return ["テスト" for _ in audio_paths]
+
+        evaluation_result = evaluate_config(
+            config,
+            [transcribe],
+        )
+
+        assert evaluation_result.metadata.total_samples == 1
+        assert len(evaluation_result.summary) == 1
 
 
-class TestPrintEvaluationResults:
-    def test_正常系_基本出力(self, capsys):
-        """基本的な結果出力のテスト"""
-        evaluation_results = {
-            "processed_count": 2,
-            "total_count": 2,
-            "average_cer": 0.25,
-            "average_kana_distance": 5.5,
-            "individual_results": [
-                {
-                    "id": "test_001",
-                    "wav_file": "test1.wav",
-                    "reference": "アイウ",
-                    "hypothesis": "アイク",
-                    "cer": 0.33,
-                    "kana_distance": 4.2,
-                }
-            ],
-        }
+class TestPrintConditionResults:
+    def test_正常系_出力内容(self, capsys: CaptureFixture[str]) -> None:
+        """print_condition_resultsの出力内容を検証"""
+        condition_result = ConditionResultItem(
+            name="condition",
+            json_file="condition.json",
+            total_samples=1,
+            model="andrewmcdowell",
+            mode="filter",
+            distances={"cer": 0.0, "kana_distance": 0.0},
+        )
 
-        print_evaluation_results(evaluation_results, "test")
+        recognition_results = [
+            RecognitionItem(
+                id="sample_001",
+                wav_file="sample.wav",
+                reference="テスト",
+                hypothesis="テスト",
+                distances={"cer": 0.0, "kana_distance": 0.0},
+            )
+        ]
+
+        print_condition_results(
+            condition_result,
+            recognition_results,
+            mode_description="filter",
+        )
 
         captured = capsys.readouterr()
-        assert "EVALUATION RESULTS (test)" in captured.out
-        assert "CER (Character Error Rate): 0.2500" in captured.out
-        assert "Kana Distance (kanasim):    5.5000" in captured.out
-        assert "test_001" in captured.out
-        assert "CER: 0.3300" in captured.out
-        assert "Kana Distance: 4.2000" in captured.out
+        assert "EVALUATION RESULTS: condition (filter)" in captured.out
+        assert "CER (Character Error Rate): 0.0000" in captured.out
+        assert "Kana Distance (kanasim):    0.0000" in captured.out
+        assert "REF: テスト" in captured.out
+        assert "HYP: テスト" in captured.out
 
-    def test_正常系_モード指定なし(self, capsys):
-        """モード指定なしの出力テスト"""
-        evaluation_results = {
-            "processed_count": 1,
-            "total_count": 1,
-            "average_cer": 0.0,
-            "average_kana_distance": 0.0,
-            "individual_results": [],
-        }
 
-        print_evaluation_results(evaluation_results)
+class TestPrintEvaluationResultSummary:
+    def test_正常系_サマリー出力(self, capsys: CaptureFixture[str]) -> None:
+        """print_evaluation_result_summaryの出力を検証"""
+        metadata = EvaluationMetadata(
+            config_name="evaluation_config",
+            json_file="config.json",
+            total_samples=2,
+            distances={"cer": 0.1},
+            execution_time=1.23,
+            batch_size=2,
+            evaluation_date="2025-10-09 10:00:00",
+            total_evaluations=1,
+        )
+
+        summary = [
+            ConditionResultItem(
+                name="condition",
+                json_file="condition.json",
+                total_samples=2,
+                model="andrewmcdowell",
+                mode="filter",
+                distances={"cer": 0.1},
+            )
+        ]
+
+        details = [
+            GroupedResultItem(
+                id="sample_001",
+                wav_file="sample.wav",
+                reference="テスト",
+                results=[
+                    SimpleRecognitionResultItem(
+                        condition_name="condition",
+                        hypothesis="テスト",
+                        distances={"cer": 0.1},
+                    )
+                ],
+            )
+        ]
+
+        evaluation_result = EvaluationResult(
+            metadata=metadata,
+            summary=summary,
+            details=details,
+        )
+
+        print_evaluation_result_summary(evaluation_result)
 
         captured = capsys.readouterr()
-        assert "EVALUATION RESULTS" in captured.out
-        assert "(test)" not in captured.out
+        assert "COMPREHENSIVE EVALUATION RESULTS" in captured.out
+        assert "Total Samples: 2" in captured.out
+        assert "condition" in captured.out
+        assert "cer: 0.1000" in captured.out

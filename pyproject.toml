@@ -21,8 +21,14 @@ dependencies = [
     "jaconv>=0.4.0",
     "editdistance>=0.8.1",
     "kanasim>=0.0.4",
-    "wheel>=0.45.1",
-    "flash-attn>=2.8.3",
+    "allosaurus>=1.0.2",
+    "phonemizer>=3.3.0",
+    "protobuf>=6.32.1",
+    "e2k>=0.6.2",
+    "g2p-en>=2.1.0",
+    "nltk>=3.9.2",
+    "arpabetandipaconvertor>=1.0.2",
+    "ipapy>=0.0.9.0",
 ]
 
 [build-system]
